@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "polimi_aos_megrez_eth0",
+  "project_id": "327bf85f-7d67-47c0-89e3-c6bf6b08d6fb"
+}
