@@ -2,7 +2,7 @@ DOCKER ?= docker
 PLATFORM ?= linux/amd64
 TAG ?= polimi-aos-megrez-build-env:$(subst /,-,$(PLATFORM))
 
-.PHONY: build-container enter-container toolchain-check
+.PHONY: build-container enter-container toolchain-check fetch-sources
 
 build-container:
 	$(DOCKER) build --platform $(PLATFORM) -t $(TAG) .
@@ -16,3 +16,6 @@ enter-container:
 
 toolchain-check:
 	$(DOCKER) run --rm $(TAG) /usr/local/bin/toolchain-check
+
+fetch-sources:
+	./scripts/fetch-sources.sh

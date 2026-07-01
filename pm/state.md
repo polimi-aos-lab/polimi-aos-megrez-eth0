@@ -8,10 +8,8 @@ Active (children + detail in bd; run `bd show <id>`):
 
 1. `…-dvq` — Fase 1: build-env + baseline kernel BSP. Toolchain prebuilt +
    kernel BSP con `dwmac-eic7700`, boot su Megrez con NIC up. Open:
-   `dvq.2` fetch-sources (rockos-kernel/u-boot, xen fork, ref pinnati);
    `dvq.3` config kernel `CONFIG_DWMAC_EIC7700=m`; `dvq.4` build-artifacts →
-   stage/; `dvq.5`
-   assemble-boot + bootcmd, NIC up (`ip link`).
+   stage/; `dvq.5` assemble-boot + bootcmd, NIC up (`ip link`).
 2. `…-60f` — Fase 2: MCP loop su Linux bare (board reale) via UART. Loop agente
    deploy/observe/reset contro il driver esistente su Linux bare, tutto su HW.
    Open: `60f.1` scheletro MCP TS single-backend
@@ -33,14 +31,14 @@ multi-arch via registry (se il flusso diventa ripetitivo).
 
 Written: 2026-07-01 · assistant
 
-Done: `dvq.1` closed. Dockerfile now defines a build-env only image on
-Debian bookworm using native Debian `gcc-riscv64-linux-gnu` packages (multi-arch
-friendly), not Bootlin tarballs; `makefile` now builds/enters/checks the build
-env; `scripts/bootstrap.sh` removed. Verification: amd64 image build passed;
-`toolchain-check` found `riscv64-linux-gnu-gcc`, `dtc`, `mkimage`,
-`qemu-system-riscv64`; forbidden legacy strings absent. State: `dvq.2` next
-(fetch pinned rockos-kernel/u-boot/xen). Gotchas: local x86 host lacks arm64
-binfmt, so `--platform linux/arm64` fails here at `/bin/sh` with Exec format
-error; should build natively on M2 / any linux-arm64 builder. QEMU non emula la
-NIC eic7700; MCP single-backend `board`; macOS container non vede USB seriale.
+Done: `dvq.2` implemented and verified. `sources.lock` pins
+`rockos-kernel@f9057cdc4816276e8ffb15f263f25ba9bd5a077e`,
+`rockos-u-boot@c9221cf2fa77d39c0b241ab4b030c708e7ebe279`, and
+`xen@d0c75dc4c028bc32fd9cf1d4358973929548de54`; `scripts/fetch-sources.sh`
+idempotently materializes them under ignored `stage/src/`; `make fetch-sources`
+wraps the script. Verification: `bash -n`, `make -n fetch-sources`, local mock
+idempotence smoke, real fetch twice, `rev-parse HEAD` matched all pins.
+State: working; `dvq.3` next (kernel config fragment). Gotchas: pins are
+current upstream branch tips resolved on 2026-07-01, not independently matched
+against the image currently booted on the board; QEMU still cannot test eic7700.
 Blockers: none.

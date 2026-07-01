@@ -21,8 +21,8 @@ Decisioni e trade-off: `pm/adr/0001-architettura-build-env-e-mcp.md`. Boundary:
   `deploy/boot/run/observe/reset`, due backend — `qemu` (`-M virt`, pty,
   virtio-net) e `board` (ymodem su UART, bootcmd u-boot esistente).
 
-Sorgenti pinnate (ref in `scripts/fetch-sources.sh`): BSP `github.com/milkv-megrez`
-(`rockos-kernel/-u-boot/-opensbi`); Xen `gitlab.com/vittorio.zaccaria/xen`
+Sorgenti pinnate (ref in `sources.lock`, materializzate da `scripts/fetch-sources.sh`):
+BSP `github.com/milkv-megrez` (`rockos-kernel/-u-boot`); Xen `gitlab.com/vittorio.zaccaria/xen`
 (mirror `olkur/xen`, dom0-less); toolchain prebuilt Bootlin / `gcc-riscv64-linux-gnu`.
 
 ## Build & test
