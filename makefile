@@ -1,17 +1,18 @@
-T?=linux/amd64
-TAG?=xendemo-$(T)-$(E)-priv
+DOCKER ?= docker
+PLATFORM ?= linux/amd64
+TAG ?= polimi-aos-megrez-build-env:$(subst /,-,$(PLATFORM))
+
+.PHONY: build-container enter-container toolchain-check
 
 build-container:
-	docker build --platform $(T) . -t $(TAG) 
-
-get-image:
-	docker run -ti -v "`pwd`:/repo" --rm $(TAG):latest /bin/bash -c "cp /root/boot/* /repo/boot"
-
-rebuild:
-	make build-container 
-	make get-image 
+	$(DOCKER) build --platform $(PLATFORM) -t $(TAG) .
 
 enter-container:
-	docker run -ti -p 5900:5900 -p 8080:6000 -v "`pwd`:/repo" --privileged --rm $(TAG):latest /bin/bash 
+	$(DOCKER) run -it --rm \
+		-v "$(CURDIR):/repo" \
+		-w /repo \
+		$(TAG) \
+		/bin/bash
 
-
+toolchain-check:
+	$(DOCKER) run --rm $(TAG) /usr/local/bin/toolchain-check

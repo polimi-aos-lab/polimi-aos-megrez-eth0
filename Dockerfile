@@ -1,63 +1,83 @@
-FROM ubuntu:focal
+# syntax=docker/dockerfile:1
+FROM debian:bookworm
+
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN echo "rebuild n.5"
-RUN apt-get update
-RUN apt-get install -y wget git qemu-system qemu-utils python3 python3-pip \
-        gcc libelf-dev libssl-dev bc flex bison vim bzip2 libncurses-dev cpio
+ENV ARCH=riscv \
+    CROSS_COMPILE=riscv64-linux-gnu- \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
 
-# Build special linux crosscompile toolchain
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        autoconf \
+        automake \
+        bc \
+        binutils-riscv64-linux-gnu \
+        bison \
+        build-essential \
+        bzip2 \
+        ca-certificates \
+        cmake \
+        cpio \
+        curl \
+        device-tree-compiler \
+        file \
+        flex \
+        gawk \
+        gcc-riscv64-linux-gnu \
+        g++-riscv64-linux-gnu \
+        git \
+        gperf \
+        gzip \
+        libelf-dev \
+        libexpat1-dev \
+        libfdt-dev \
+        libglib2.0-dev \
+        libgmp-dev \
+        libmpc-dev \
+        libmpfr-dev \
+        libncurses-dev \
+        libpixman-1-dev \
+        libslirp-dev \
+        libssl-dev \
+        libtool \
+        lrzsz \
+        make \
+        ninja-build \
+        patch \
+        patchutils \
+        pkg-config \
+        python3 \
+        python3-dev \
+        python3-pip \
+        python3-setuptools \
+        python3-venv \
+        qemu-system-misc \
+        qemu-utils \
+        rsync \
+        texinfo \
+        u-boot-tools \
+        unzip \
+        wget \
+        xz-utils \
+        zlib1g-dev \
+        zstd && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-ENV RISCV=/opt/riscv
+RUN printf '%s\n' \
+        '#!/bin/sh' \
+        'set -eu' \
+        ': "${CROSS_COMPILE:=riscv64-linux-gnu-}"' \
+        '"${CROSS_COMPILE}gcc" --version >/dev/null' \
+        'dtc --version >/dev/null' \
+        'mkimage -V >/dev/null' \
+        'qemu-system-riscv64 --version >/dev/null' \
+        'echo "build-env ok: ${CROSS_COMPILE}gcc, dtc, mkimage, qemu-system-riscv64"' \
+    > /usr/local/bin/toolchain-check && \
+    chmod +x /usr/local/bin/toolchain-check
 
-RUN apt-get update && apt-get -y install \
-    autoconf automake autotools-dev curl python3 python3-pip \
-    libmpc-dev libmpfr-dev libgmp-dev gawk build-essential bison flex \
-    texinfo gperf libtool patchutils bc zlib1g-dev libexpat-dev ninja-build \
-    git cmake libglib2.0-dev libslirp-dev
+WORKDIR /repo
 
-RUN git clone https://github.com/riscv-collab/riscv-gnu-toolchain.git /usr/src/riscv-gnu-toolchain
-
-WORKDIR /usr/src/riscv-gnu-toolchain
-RUN ./configure --prefix=/opt/riscv
-RUN make linux
-
-RUN make install && \
-    rm -rf /usr/src/riscv-gnu-toolchain
-
-ENV PATH=/opt/riscv/bin:$PATH
-
-
-# Download kernel
-RUN mkdir -p /sources
-WORKDIR /sources
-RUN wget https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/snapshot/linux-6.4.16.tar.gz
-RUN tar xvzf linux-6.4.16.tar.gz
-RUN mv linux-6.4.16 linux
-COPY scripts/linux_sbi.config /sources/linux/.config
-WORKDIR /sources/linux
-RUN make ARCH=riscv CROSS_COMPILE=riscv64-unknown-linux-gnu-
-
-
-RUN mkdir -p /root/boot
-RUN cp /sources/linux/arch/riscv/boot/Image.gz /root/boot
-WORKDIR /sources
-RUN wget https://busybox.net/downloads/busybox-1.32.1.tar.bz2
-RUN tar xvjf busybox-1.32.1.tar.bz2
-WORKDIR /sources/busybox-1.32.1
-
-COPY scripts/busybox.config /sources/busybox-1.32.1/.config
-RUN CROSS_COMPILE=riscv64-unknown-linux-gnu- make 
-RUN CROSS_COMPILE=riscv64-unknown-linux-gnu- make install
- 
-RUN mkdir -p /root/boot/initramfs/fs
-WORKDIR /root/boot/initramfs/fs
-RUN mkdir -pv bin sbin etc proc sys usr/bin usr/sbin
-RUN cp -av /sources/busybox-1.32.1/_install/* .
-
-RUN find . -print0 | cpio --null -ov --format=newc | gzip -9 > /root/boot/initramfs-busybox-riscv64.cpio.gz
-WORKDIR /root/boot
-RUN rm -rf initramfs
-
-
-
+CMD ["/bin/bash"]

@@ -8,9 +8,9 @@ Active (children + detail in bd; run `bd show <id>`):
 
 1. `…-dvq` — Fase 1: build-env + baseline kernel BSP. Toolchain prebuilt +
    kernel BSP con `dwmac-eic7700`, boot su Megrez con NIC up. Open:
-   `dvq.1` riscrivere Dockerfile (prebuilt, via 6.4.16); `dvq.2` fetch-sources
-   (rockos-kernel/u-boot, xen fork, ref pinnati); `dvq.3` config kernel
-   `CONFIG_DWMAC_EIC7700=m`; `dvq.4` build-artifacts → stage/; `dvq.5`
+   `dvq.2` fetch-sources (rockos-kernel/u-boot, xen fork, ref pinnati);
+   `dvq.3` config kernel `CONFIG_DWMAC_EIC7700=m`; `dvq.4` build-artifacts →
+   stage/; `dvq.5`
    assemble-boot + bootcmd, NIC up (`ip link`).
 2. `…-60f` — Fase 2: MCP loop su Linux bare (board reale) via UART. Loop agente
    deploy/observe/reset contro il driver esistente su Linux bare, tutto su HW.
@@ -33,16 +33,14 @@ multi-arch via registry (se il flusso diventa ripetitivo).
 
 Written: 2026-07-01 · assistant
 
-Done: bootstrap PM `bare` + beads (Dolt SSOT, export off); 3 epic + 14 beads;
-ADR 0001 (`…-18y`). Migrato al formato `state.md`. State: solo PM/ADR, nessun
-codice ambiente toccato; Dockerfile attuale = flow legacy (toolchain
-from-source + 6.4.16 senza driver) + `scripts/bootstrap.sh` morto, da rimuovere
-in Fase 1. Next: 1) verificare ref/branch + defconfig di `rockos-kernel` per il
-Megrez; 2) confermare cosa carica l'u-boot on-board (FIT vs Image+DTB); 3)
-aprire Fase 1 e riscrivere il Dockerfile su toolchain prebuilt. Gotchas: QEMU
-non emula la NIC eic7700 → NON è un backend MCP, solo smoke-test del boot Xen;
-MCP single-backend `board` + mock seriale per dev offline; su macOS il container
-non vede la seriale USB → MCP nativo sull'host; artefatti RISC-V portabili (copia),
-build-env host-specifico (rebuild, non `docker save`); `bd bootstrap` va in
-timeout sul pull di rete (remote senza storia Dolt) ma il DB locale è usabile.
+Done: `dvq.1` closed. Dockerfile now defines a build-env only image on
+Debian bookworm using native Debian `gcc-riscv64-linux-gnu` packages (multi-arch
+friendly), not Bootlin tarballs; `makefile` now builds/enters/checks the build
+env; `scripts/bootstrap.sh` removed. Verification: amd64 image build passed;
+`toolchain-check` found `riscv64-linux-gnu-gcc`, `dtc`, `mkimage`,
+`qemu-system-riscv64`; forbidden legacy strings absent. State: `dvq.2` next
+(fetch pinned rockos-kernel/u-boot/xen). Gotchas: local x86 host lacks arm64
+binfmt, so `--platform linux/arm64` fails here at `/bin/sh` with Exec format
+error; should build natively on M2 / any linux-arm64 builder. QEMU non emula la
+NIC eic7700; MCP single-backend `board`; macOS container non vede USB seriale.
 Blockers: none.
