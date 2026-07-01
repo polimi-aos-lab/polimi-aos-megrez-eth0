@@ -1,17 +1,20 @@
-# ADR 0001 — Architettura: build-env portabile + MCP a due backend
+# ADR 0001 — Architettura: build-env portabile + MCP single-backend (board)
 
 - **Status:** Accepted
 - **Date:** 2026-07-01
 - **Deciders:** vzaccaria
 - **Context tracker:** epics `polimi-aos-megrez-eth0-dvq`, `-60f`, `-sju`
+- **Amended:** 2026-07-01 — QEMU declassato da backend MCP a smoke-test del
+  boot Xen (non emula la NIC eic7700); MCP diventa single-backend `board` +
+  mock seriale per dev offline. Aggiornati D4, D5, Conseguenze, Alternative.
 
 ## Contesto
 
 Serve un ambiente per compilare **u-boot + Xen + Linux su RISC-V** e un loop di
 sviluppo per far funzionare il **driver ethernet** della board **Milk-V Megrez
 (SoC ESWIN EIC7700X)**, prima su Linux bare e poi **in passthrough sotto Xen
-dom0-less**. Un agente deve poter deployare, eseguire, osservare e ciclare sia
-su **QEMU** sia sulla **board reale** via **UART**.
+dom0-less**. Un agente deve poter deployare, eseguire, osservare e ciclare
+sulla **board reale** via **UART**.
 
 Vincoli e fatti accertati:
 
@@ -58,29 +61,38 @@ Si builda il **BSP Megrez** (`milkv-megrez/rockos-kernel`), che contiene
 `dwmac-eic7700` e il DT del SoC. Il flow 6.4.16 e `scripts/bootstrap.sh`
 (codice morto, riferito ad amd64/aarch64, mai invocato) vengono **rimossi**.
 
-### D4 — MCP: interfaccia unica, due backend, processo nativo sull'host
+### D4 — MCP: interfaccia unica, single-backend (board), processo nativo sull'host
 
-Un solo server MCP espone `deploy / boot / run / observe / reset`. Due backend:
+Un solo server MCP espone `deploy / boot / run / observe / reset`, con un solo
+backend reale:
 
-- `qemu`: `qemu-system-riscv64 -M virt`, seriale su **pty**, `virtio-net`;
-  `reset()` = kill+respawn del processo.
 - `board`: `deploy` via **ymodem** su UART, `boot` via `bootcmd` u-boot
   esistente, `observe` legge `/dev/tty.usbserial-*`, `reset()` via **SBI
   SRST / SysRq-over-serial**.
+
+Per lo sviluppo offline (senza board collegata) c'è un **mock seriale** (pty
+scriptato) che simula le risposte: dev aid, non un target di produzione. QEMU
+**non** è un backend MCP: non emula la NIC eic7700, quindi non eserciterebbe né
+il driver né la meccanica di passthrough (device platform-MMIO vs virtio).
 
 L'MCP gira **nativo sull'host** (non in container), perché su macOS il container
 non vede la seriale USB. Linguaggio: **TypeScript/Node** (SDK MCP ufficiale +
 `serialport`).
 
-### D5 — Stadiazione: driver su Linux bare → poi sotto Xen
+### D5 — Stadiazione: driver su Linux bare → poi sotto Xen (tutto su board)
 
-Poiché QEMU non emula la NIC reale e Xen-RISC-V è acerbo, si procede a stadi:
+Poiché QEMU non emula la NIC reale, ogni fase che tocca il driver vive su
+hardware:
 
 1. **Baseline HW**: BSP Linux bare sul Megrez, NIC up. (Fase 1)
-2. **Scaffolding su QEMU**: MCP + transport + Xen dom0-less/domU su `virt`,
-   senza NIC reale. (Fase 2)
-3. **Xen sul Megrez**: stesso domU, NIC eic7700 in passthrough via DT; l'agente
-   cicla su hardware. (Fase 3)
+2. **MCP su Linux bare HW**: loop deploy/observe/reset via UART sulla board,
+   contro il driver esistente su Linux bare. (Fase 2)
+3. **Xen sul Megrez**: domU dom0-less, NIC eic7700 in passthrough via DT;
+   l'agente cicla su hardware. (Fase 3)
+
+QEMU `virt` resta solo come **smoke-test non-MCP** del boot Xen (il binario Xen +
+DT dom0-less + kernel domU bootano?), indipendente dalla NIC — utile per il
+bring-up di Xen prima di andare su HW. Target `make qemu-xen-smoke`, non una fase.
 
 ### D6 — Reset: SBI SRST + SysRq-over-serial come primario
 
@@ -94,7 +106,8 @@ hardware sul pin reset = miglioramento futuro, parcheggiato.
 
 - Portabilità x86→Mac ridotta a copia di file (artefatti) + rebuild veloce
   (build-env con toolchain prebuilt). Nessuna emulazione nel percorso di build.
-- Un solo contratto MCP: l'agente cicla identico su QEMU e su hardware.
+- Un solo contratto MCP, un solo backend (`board`): meno codice, nessuna
+  simmetria fittizia con un'emulazione che non esercita il target.
 - Rimozione di codice morto (6.4.16, `bootstrap.sh`) e di un build da ore.
 
 **Negative / rischi**
@@ -116,8 +129,9 @@ hardware sul pin reset = miglioramento futuro, parcheggiato.
   di triplet non giustificata quando basta ricostruire il build-env con prebuilt.
 - **Kernel mainline + backport driver**: rimandabile; il BSP dà la baseline più
   rapida e fedele alla board.
-- **Due MCP separati (qemu / board)**: scartato — duplicherebbe la logica del
-  loop; un'interfaccia unica con backend è più pulita.
+- **QEMU come backend MCP / test del driver in emulazione**: scartato — `virt`
+  espone virtio-net, non l'eic7700 (device platform-MMIO); non esercita né
+  driver né passthrough. QEMU resta solo smoke-test del boot Xen (non-MCP).
 - **Delta dell'immagine di sistema intera via UART**: scartato per il loop del
   driver — MB su UART a 115200 (~11 KB/s) = minuti/giro; si spingono solo i file
   cambiati (`.ko`/config) su una Linux già bootata da SD.
