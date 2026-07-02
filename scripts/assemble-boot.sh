@@ -138,8 +138,11 @@ require_dir() {
 copy_file() {
     local src=${1:?source required}
     local dst=${2:?destination required}
+    local dst_dir
 
-    install -D -m 0644 "${src}" "${dst}"
+    dst_dir=$(dirname -- "${dst}")
+    mkdir -p -- "${dst_dir}"
+    install -m 0644 "${src}" "${dst}"
 }
 
 shell_single_quote() {
