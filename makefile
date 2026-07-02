@@ -1,5 +1,7 @@
 DOCKER ?= docker
-PLATFORM ?= linux/amd64
+HOST_OS := $(shell uname -s)
+DEFAULT_PLATFORM := $(if $(filter Darwin,$(HOST_OS)),linux/aarch64,linux/amd64)
+PLATFORM ?= $(DEFAULT_PLATFORM)
 TAG ?= polimi-aos-megrez-build-env:$(subst /,-,$(PLATFORM))
 
 .PHONY: build-container enter-container toolchain-check fetch-sources build-artifacts assemble-boot
@@ -20,8 +22,8 @@ toolchain-check:
 fetch-sources:
 	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(TAG)" ./scripts/fetch-sources.sh
 
-build-artifacts: fetch-sources
+build-artifacts: 
 	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(TAG)" ./scripts/build-artifacts.sh
 
-assemble-boot: build-artifacts
+assemble-boot: 
 	./scripts/assemble-boot.sh
