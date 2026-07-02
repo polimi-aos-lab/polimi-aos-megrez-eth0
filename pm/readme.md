@@ -40,9 +40,13 @@ branch `latest` (mirror `olkur/xen`, dom0-less); toolchain prebuilt Bootlin / `g
 
 ## Conventions
 
-- Kernel = **BSP vendor**: la NIC Megrez usa il backport `DWMAC_WIN2030`
-  (`dwmac-win2030.c`, compatible `eswin,win2030-qos-eth`), non il simbolo
-  upstream più recente `DWMAC_EIC7700`.
+- Kernel config = BSP vendor `win2030_defconfig` + delta
+  `config/kernel/eic7700-eth.fragment`. Il defconfig è la baseline Milk-V/ESWIN;
+  il frammento tiene solo il delta locale: `STMMAC_ETH=m`,
+  `STMMAC_PLATFORM=m`, `DWMAC_WIN2030=m`, `MAGIC_SYSRQ=y`, `BCMDHD=n`
+  (AP12275 Wi-Fi incompleto nel checkout). La NIC Megrez usa `DWMAC_WIN2030`
+  (`dwmac-win2030.c`, compatible `eswin,win2030-qos-eth`), non l'upstream
+  recente `DWMAC_EIC7700`.
 - QEMU **non emula** la NIC eic7700 (solo virtio-net): driver reale testabile
   **solo su HW**; QEMU per catena di boot, meccanica Xen/DT, MCP a secco.
 - Reset board: **SBI SRST + magic SysRq over serial** (`panic=-1`); non recupera
