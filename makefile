@@ -2,7 +2,7 @@ DOCKER ?= docker
 PLATFORM ?= linux/amd64
 TAG ?= polimi-aos-megrez-build-env:$(subst /,-,$(PLATFORM))
 
-.PHONY: build-container enter-container toolchain-check fetch-sources build-artifacts
+.PHONY: build-container enter-container toolchain-check fetch-sources build-artifacts assemble-boot
 
 build-container:
 	$(DOCKER) build --platform $(PLATFORM) -t $(TAG) .
@@ -22,3 +22,6 @@ fetch-sources:
 
 build-artifacts: fetch-sources
 	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(TAG)" ./scripts/build-artifacts.sh
+
+assemble-boot: build-artifacts
+	./scripts/assemble-boot.sh

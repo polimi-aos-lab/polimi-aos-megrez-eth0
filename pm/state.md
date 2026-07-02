@@ -28,12 +28,12 @@ multi-arch via registry (se il flusso diventa ripetitivo).
 
 Written: 2026-07-02 · assistant
 
-Done: `dvq.4` added Docker-only artifact pipeline: `scripts/fetch-sources.sh`
-now materializes pinned git/tar sources (`rockos-kernel`, Xen, BusyBox, lrzsz);
-`scripts/build-artifacts.sh` builds BSP `Image(.gz)`, modules,
-`dwmac-win2030.ko`, `eic7700-milkv-megrez.dtb`, and a static initramfs with
-`sz`/`rz` + BusyBox `insmod`/`ip` into `stage/`. Verified full Docker build and
-artifact smoke checks. State: working; `dvq.5` next (boot layout/bootcmd + HW
-NIC up). Gotchas: the pinned BSP `win2030_defconfig` enables missing-source
-`CONFIG_BCMDHD`; the Ethernet fragment disables it so clean cross-builds pass.
-QEMU still cannot test the EIC7700 NIC. Blockers: none.
+Done: `dvq.5` host-side boot assembly implemented: `scripts/assemble-boot.sh`
+generates `stage/boot/` with `boot.scr`, boot payload, NIC-capable initramfs,
+and serial/U-Boot instructions; `make assemble-boot` and `docs/megrez-boot.md`
+added. Verified locally: shell syntax, script generation, `mkimage -l`, and
+initramfs archive contains `dwmac-win2030.ko` + `/root/nic-bringup.sh`. State:
+code working, HW acceptance pending. Next: 1) copy `stage/boot/.` to Megrez SD
+partition 1 2) one-shot boot via UART `load/source` 3) run `/root/nic-bringup.sh`
+and capture `ip link`/ping. Gotchas: no serial device visible in this session;
+QEMU cannot test EIC7700 NIC. Blockers: board/UART hardware verification.

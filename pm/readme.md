@@ -37,6 +37,8 @@ branch `latest` (mirror `olkur/xen`, dom0-less); toolchain prebuilt Bootlin / `g
 3. `make build-artifacts` — through Docker, emits `stage/Image(.gz)`,
    `stage/modules/`, `stage/dwmac-win2030.ko`, `stage/initramfs.cpio.gz`, and
    `stage/eic7700-milkv-megrez.dtb`.
+4. `make assemble-boot` — creates `stage/boot/` with `boot.scr`, boot payload,
+   NIC-capable initramfs, and SD/U-Boot instructions.
 
 ## Conventions
 
