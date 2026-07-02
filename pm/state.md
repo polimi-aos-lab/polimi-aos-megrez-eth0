@@ -8,8 +8,7 @@ Active (children + detail in bd; run `bd show <id>`):
 
 1. `…-dvq` — Fase 1: build-env + baseline kernel BSP. Toolchain prebuilt +
    kernel BSP con glue Ethernet vendor `DWMAC_WIN2030`, boot su Megrez con NIC
-   up. Open: `dvq.4` build-artifacts → stage/; `dvq.5` assemble-boot +
-   bootcmd, NIC up (`ip link`).
+   up. Open: `dvq.5` assemble-boot + bootcmd, NIC up (`ip link`).
 2. `…-60f` — Fase 2: MCP loop su Linux bare (board reale) via UART. Loop agente
    deploy/observe/reset contro il driver esistente su Linux bare, tutto su HW.
    Open: `60f.1` scheletro MCP TS single-backend
@@ -29,11 +28,12 @@ multi-arch via registry (se il flusso diventa ripetitivo).
 
 Written: 2026-07-02 · assistant
 
-Done: `dvq.3` added `config/kernel/eic7700-eth.fragment` for the pinned BSP
-`win2030_defconfig`: `STMMAC_ETH=m`, `STMMAC_PLATFORM=m`, `DWMAC_WIN2030=m`,
-`MAGIC_SYSRQ=y`. Verified with BSP `merge_config.sh` in the build container;
-final `.config` has those four requested values.
-State: working; `dvq.4` next (kernel build artifacts under `stage/`). Gotchas:
-the pinned 6.6.y BSP does **not** have upstream `CONFIG_DWMAC_EIC7700`; Megrez
-Ethernet is `DWMAC_WIN2030` / `dwmac-win2030.c`, compatible
-`eswin,win2030-qos-eth`. QEMU still cannot test the EIC7700 NIC. Blockers: none.
+Done: `dvq.4` added Docker-only artifact pipeline: `scripts/fetch-sources.sh`
+now materializes pinned git/tar sources (`rockos-kernel`, Xen, BusyBox, lrzsz);
+`scripts/build-artifacts.sh` builds BSP `Image(.gz)`, modules,
+`dwmac-win2030.ko`, `eic7700-milkv-megrez.dtb`, and a static initramfs with
+`sz`/`rz` + BusyBox `insmod`/`ip` into `stage/`. Verified full Docker build and
+artifact smoke checks. State: working; `dvq.5` next (boot layout/bootcmd + HW
+NIC up). Gotchas: the pinned BSP `win2030_defconfig` enables missing-source
+`CONFIG_BCMDHD`; the Ethernet fragment disables it so clean cross-builds pass.
+QEMU still cannot test the EIC7700 NIC. Blockers: none.

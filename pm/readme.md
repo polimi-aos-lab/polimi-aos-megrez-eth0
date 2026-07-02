@@ -30,7 +30,13 @@ branch `latest` (mirror `olkur/xen`, dom0-less); toolchain prebuilt Bootlin / `g
 
 ## Build & test
 
-WIP (Fase 1). Vedi `state.md` e `bd ready` per lo stato corrente.
+1. `make build-container` — builds the Docker build image (`TAG`/`PLATFORM`
+   overrideable).
+2. `make fetch-sources` — materializes pinned git/tar sources under
+   `stage/src/` through Docker.
+3. `make build-artifacts` — through Docker, emits `stage/Image(.gz)`,
+   `stage/modules/`, `stage/dwmac-win2030.ko`, `stage/initramfs.cpio.gz`, and
+   `stage/eic7700-milkv-megrez.dtb`.
 
 ## Conventions
 

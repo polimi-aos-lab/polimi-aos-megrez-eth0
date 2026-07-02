@@ -4,3 +4,6 @@ CONFIG_STMMAC_ETH=m
 CONFIG_STMMAC_PLATFORM=m
 CONFIG_DWMAC_WIN2030=m
 CONFIG_MAGIC_SYSRQ=y
+# The vendor Broadcom AP12275 Wi-Fi module references out-of-tree headers that
+# are not present in the pinned BSP checkout; keep the baseline Ethernet build clean.
+# CONFIG_BCMDHD is not set
