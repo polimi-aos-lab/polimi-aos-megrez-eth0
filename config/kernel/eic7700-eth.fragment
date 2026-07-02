@@ -1,0 +1,6 @@
+# Fragment for merge_config.sh on stage/src/rockos-kernel/arch/riscv/configs/win2030_defconfig.
+# Verified BSP Ethernet glue: DWMAC_WIN2030 (driver dwmac-win2030.c), compatible "eswin,win2030-qos-eth".
+CONFIG_STMMAC_ETH=m
+CONFIG_STMMAC_PLATFORM=m
+CONFIG_DWMAC_WIN2030=m
+CONFIG_MAGIC_SYSRQ=y

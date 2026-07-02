@@ -2,5 +2,4 @@
 # Format: <name> <git-url> <source-ref> <pinned-commit>
 # source-ref records where the pin came from; scripts/fetch-sources.sh fetches the commit.
 rockos-kernel https://github.com/milkv-megrez/rockos-kernel.git refs/heads/rockos-v6.6.y f9057cdc4816276e8ffb15f263f25ba9bd5a077e
-rockos-u-boot https://github.com/milkv-megrez/rockos-u-boot.git refs/heads/rockos-dev c9221cf2fa77d39c0b241ab4b030c708e7ebe279
-xen https://gitlab.com/vittorio.zaccaria/xen.git refs/heads/staging d0c75dc4c028bc32fd9cf1d4358973929548de54
+xen https://gitlab.com/vittorio.zaccaria/xen.git refs/heads/latest 0ea99a8027782292dd1488a470d84e22cb0d0438

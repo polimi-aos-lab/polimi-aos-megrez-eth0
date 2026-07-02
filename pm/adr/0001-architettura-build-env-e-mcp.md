@@ -4,17 +4,18 @@
 - **Date:** 2026-07-01
 - **Deciders:** vzaccaria
 - **Context tracker:** epics `polimi-aos-megrez-eth0-dvq`, `-60f`, `-sju`
-- **Amended:** 2026-07-01 — QEMU declassato da backend MCP a smoke-test del
-  boot Xen (non emula la NIC eic7700); MCP diventa single-backend `board` +
-  mock seriale per dev offline. Aggiornati D4, D5, Conseguenze, Alternative.
+- **Amended:** 2026-07-02 — u-boot non si builda: Megrez lo ha già on-board, il
+  piano usa solo `bootcmd`/boot script; Xen pinned da branch `latest`.
+  Amend precedente: QEMU declassato da backend MCP a smoke-test del boot Xen.
 
 ## Contesto
 
-Serve un ambiente per compilare **u-boot + Xen + Linux su RISC-V** e un loop di
-sviluppo per far funzionare il **driver ethernet** della board **Milk-V Megrez
-(SoC ESWIN EIC7700X)**, prima su Linux bare e poi **in passthrough sotto Xen
-dom0-less**. Un agente deve poter deployare, eseguire, osservare e ciclare
-sulla **board reale** via **UART**.
+Serve un ambiente per compilare **Xen + Linux su RISC-V** e un loop di sviluppo
+per far funzionare il **driver ethernet** della board **Milk-V Megrez (SoC
+ESWIN EIC7700X)**, prima su Linux bare e poi **in passthrough sotto Xen
+dom0-less**. La board ha già u-boot on-board: non lo ricompiliamo, cambiamo solo
+`bootcmd`/boot script. Un agente deve poter deployare, eseguire, osservare e
+ciclare sulla **board reale** via **UART**.
 
 Vincoli e fatti accertati:
 

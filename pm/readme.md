@@ -2,11 +2,13 @@
 
 ## Purpose
 
-Ambiente di build e loop di sviluppo per **u-boot + Xen + Linux su RISC-V**,
-mirato al **Milk-V Megrez (SoC ESWIN EIC7700X)**. Due obiettivi: (1) far
-funzionare il **driver ethernet** della NIC (`dwmac-eic7700`) su Linux bare e poi
-**in passthrough sotto Xen dom0-less**; (2) un **server MCP** con cui un agente
-deploya, esegue, osserva e cicla — su **QEMU** e sulla **board reale** via UART.
+Ambiente di build e loop di sviluppo per **Xen + Linux su RISC-V**, mirato al
+**Milk-V Megrez (SoC ESWIN EIC7700X)**. La board ha già u-boot: non lo
+ricompiliamo, lo usiamo solo per `bootcmd`/boot script. Due obiettivi: (1) far
+funzionare il **driver ethernet** della NIC (nel BSP: `DWMAC_WIN2030` /
+`dwmac-win2030.c`) su Linux bare e poi **in passthrough sotto Xen dom0-less**;
+(2) un **server MCP** con cui un agente deploya, esegue, osserva e cicla — su
+**QEMU** e sulla **board reale** via UART.
 Host builder = questo server x86; target d'uso = laptop macOS Apple Silicon M2.
 
 ## Architecture
@@ -18,12 +20,13 @@ Decisioni e trade-off: `pm/adr/0001-architettura-build-env-e-mcp.md`. Boundary:
   arch-independent → x86→Mac per copia; build-env host-specifico → si ricostruisce
   (non `docker save`).
 - **MCP** (TypeScript/Node, **nativo sull'host**): interfaccia unica
-  `deploy/boot/run/observe/reset`, due backend — `qemu` (`-M virt`, pty,
-  virtio-net) e `board` (ymodem su UART, bootcmd u-boot esistente).
+  `deploy/boot/run/observe/reset`, backend reale `board` (ymodem su UART,
+  bootcmd u-boot esistente), mock seriale pty per dev offline. QEMU resta solo
+  smoke-test non-MCP del boot Xen (`-M virt`, virtio-net).
 
 Sorgenti pinnate (ref in `sources.lock`, materializzate da `scripts/fetch-sources.sh`):
-BSP `github.com/milkv-megrez` (`rockos-kernel/-u-boot`); Xen `gitlab.com/vittorio.zaccaria/xen`
-(mirror `olkur/xen`, dom0-less); toolchain prebuilt Bootlin / `gcc-riscv64-linux-gnu`.
+BSP kernel `github.com/milkv-megrez/rockos-kernel`; Xen `gitlab.com/vittorio.zaccaria/xen`
+branch `latest` (mirror `olkur/xen`, dom0-less); toolchain prebuilt Bootlin / `gcc-riscv64-linux-gnu`.
 
 ## Build & test
 
@@ -31,8 +34,9 @@ WIP (Fase 1). Vedi `state.md` e `bd ready` per lo stato corrente.
 
 ## Conventions
 
-- Kernel = **BSP vendor** (ha `dwmac-eic7700`), non mainline 6.4.16 (privo del
-  driver; vecchio flow Dockerfile = codice morto).
+- Kernel = **BSP vendor**: la NIC Megrez usa il backport `DWMAC_WIN2030`
+  (`dwmac-win2030.c`, compatible `eswin,win2030-qos-eth`), non il simbolo
+  upstream più recente `DWMAC_EIC7700`.
 - QEMU **non emula** la NIC eic7700 (solo virtio-net): driver reale testabile
   **solo su HW**; QEMU per catena di boot, meccanica Xen/DT, MCP a secco.
 - Reset board: **SBI SRST + magic SysRq over serial** (`panic=-1`); non recupera
