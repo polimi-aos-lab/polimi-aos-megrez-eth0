@@ -154,6 +154,53 @@ assert_kernel_config() {
             exit 1
         fi
     done
+
+    for setting in \
+        CONFIG_DRM \
+        CONFIG_DRM_IMG \
+        CONFIG_DRM_IMG_VOLCANIC \
+        CONFIG_DRM_AMDGPU \
+        CONFIG_DRM_RADEON \
+        CONFIG_DRM_NOUVEAU \
+        CONFIG_DRM_ESWIN \
+        CONFIG_FB \
+        CONFIG_MEDIA_SUPPORT \
+        CONFIG_SOUND \
+        CONFIG_ESWIN_DSP \
+        CONFIG_ESWIN_NPU \
+        CONFIG_ESWIN_DSP_SUBSYS \
+        CONFIG_ESWIN_LPCPU \
+        CONFIG_ESWIN_BUDDY \
+        CONFIG_ESWIN_PROC \
+        CONFIG_ESWIN_RSVMEM_HEAP \
+        CONFIG_ESWIN_DEV_DMA_BUF \
+        CONFIG_ESWIN_IOMMU_RSV \
+        CONFIG_ESWIN_MMZ_VB \
+        CONFIG_ESWIN_DMA_MEMCP \
+        CONFIG_CRYPTO_DEV_ESWIN_EIC770x \
+        CONFIG_REGULATOR_MPQ8785 \
+        CONFIG_WIRELESS \
+        CONFIG_CFG80211 \
+        CONFIG_MAC80211 \
+        CONFIG_RFKILL \
+        CONFIG_WLAN \
+        CONFIG_NETFILTER \
+        CONFIG_BPFILTER \
+        CONFIG_BRIDGE \
+        CONFIG_BONDING \
+        CONFIG_WIREGUARD \
+        CONFIG_NET_TEAM \
+        CONFIG_MACVLAN \
+        CONFIG_IPVLAN \
+        CONFIG_VXLAN \
+        CONFIG_VETH \
+        CONFIG_DUMMY
+    do
+        if grep -Eq -- "^${setting}=(y|m)$" "${config}"; then
+            printf 'error: final kernel config enables %s\n' "${setting}" >&2
+            exit 1
+        fi
+    done
 }
 
 build_kernel_artifacts() {

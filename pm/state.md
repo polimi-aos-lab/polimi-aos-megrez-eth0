@@ -28,12 +28,16 @@ multi-arch via registry (se il flusso diventa ripetitivo).
 
 Written: 2026-07-02 · assistant
 
-Done: `dvq.5` host-side boot assembly implemented: `scripts/assemble-boot.sh`
-generates `stage/boot/` with `boot.scr`, boot payload, NIC-capable initramfs,
-and serial/U-Boot instructions; `make assemble-boot` and `docs/megrez-boot.md`
-added. Verified locally: shell syntax, script generation, `mkimage -l`, and
-initramfs archive contains `dwmac-win2030.ko` + `/root/nic-bringup.sh`. State:
-code working, HW acceptance pending. Next: 1) copy `stage/boot/.` to Megrez SD
-partition 1 2) one-shot boot via UART `load/source` 3) run `/root/nic-bringup.sh`
-and capture `ip link`/ping. Gotchas: no serial device visible in this session;
-QEMU cannot test EIC7700 NIC. Blockers: board/UART hardware verification.
+Done: `dvq.5` host-side boot assembly and `dvq.6` wired-headless kernel artifact
+config. `config/kernel/eic7700-eth.fragment` now keeps Ethernet/SysRq and cuts
+GPU/DRM/media/audio/wireless/firewall/overlay net/MPQ8785/ESWIN crypto+AI
+stacks; `scripts/build-artifacts.sh` asserts the final `.config` rejects those
+symbols. Verified locally: `bash -n scripts/build-artifacts.sh`, final `.config`
+scan (`missing_required=[]`, `enabled_forbidden=[]`), and full
+`DOCKER_IMAGE=polimi-aos-megrez-build-env:linux-aarch64 JOBS=8
+./scripts/build-artifacts.sh` produced Image, Image.gz, DTB, dwmac module,
+modules tree, and initramfs. State: code working, HW acceptance pending. Next:
+1) copy `stage/boot/.` to Megrez SD partition 1 2) one-shot boot via UART
+`load/source` 3) run `/root/nic-bringup.sh` and capture `ip link`/ping. Gotchas:
+no serial device visible in this session; QEMU cannot test EIC7700 NIC. Blockers:
+board/UART hardware verification.

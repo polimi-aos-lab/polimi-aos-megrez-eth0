@@ -4,6 +4,48 @@ CONFIG_STMMAC_ETH=m
 CONFIG_STMMAC_PLATFORM=m
 CONFIG_DWMAC_WIN2030=m
 CONFIG_MAGIC_SYSRQ=y
+
+# Headless serial-console/NIC baseline: do not build graphics, media, audio,
+# wireless, firewall/overlay networking, regulator, crypto, or accelerator
+# stacks from the vendor defconfig. They are not needed to boot Megrez far
+# enough to load the Ethernet module and dominate kernel build time.
+# DRM_IMG_VOLCANIC selects DRM, so keep both the selector and the parent off.
+# CONFIG_DRM_IMG_VOLCANIC is not set
+# CONFIG_DRM_IMG is not set
+# CONFIG_DRM is not set
+# CONFIG_FB is not set
+# CONFIG_MEDIA_SUPPORT is not set
+# CONFIG_SOUND is not set
+# CONFIG_ESWIN_DSP_SUBSYS is not set
+# CONFIG_ESWIN_DSP is not set
+# CONFIG_ESWIN_NPU is not set
+# CONFIG_ESWIN_LPCPU is not set
+# CONFIG_ESWIN_BUDDY is not set
+# CONFIG_ESWIN_PROC is not set
+# CONFIG_ESWIN_RSVMEM_HEAP is not set
+# CONFIG_ESWIN_DEV_DMA_BUF is not set
+# CONFIG_ESWIN_IOMMU_RSV is not set
+# CONFIG_ESWIN_MMZ_VB is not set
+# CONFIG_ESWIN_DMA_MEMCP is not set
+# CONFIG_CRYPTO_DEV_ESWIN_EIC770x is not set
+# CONFIG_REGULATOR_MPQ8785 is not set
+# CONFIG_WIRELESS is not set
+# CONFIG_CFG80211 is not set
+# CONFIG_MAC80211 is not set
+# CONFIG_RFKILL is not set
+# CONFIG_WLAN is not set
+# CONFIG_NETFILTER is not set
+# CONFIG_BPFILTER is not set
+# CONFIG_BRIDGE is not set
+# CONFIG_BONDING is not set
+# CONFIG_WIREGUARD is not set
+# CONFIG_NET_TEAM is not set
+# CONFIG_MACVLAN is not set
+# CONFIG_IPVLAN is not set
+# CONFIG_VXLAN is not set
+# CONFIG_VETH is not set
+# CONFIG_DUMMY is not set
+
 # The vendor Broadcom AP12275 Wi-Fi module references out-of-tree headers that
 # are not present in the pinned BSP checkout; keep the baseline Ethernet build clean.
 # CONFIG_BCMDHD is not set
