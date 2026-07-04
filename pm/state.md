@@ -33,7 +33,8 @@ fake two-domU generation, and real staged Linux `Image`+initramfs generation wit
 fake Xen passed. Board Linux/SD preflight passed after user reset. Next:
 1) `make build-container fetch-sources build-artifacts build-xen` 2) provide the
 user-proven board DTB if different from `stage/eic7700-milkv-megrez.dtb`
-3) `make board-xen-smoke`, copy `stage/board-xen-smoke/` to USB, then `usb start;
-load usb 0 0x88100000 boot.scr; source 0x88100000`. Gotchas: uppercase `RISCV`
-mkimage form; FAT/NLS exposes 8.3 aliases, so USB/ext4 or `xen.uimg` avoids traps.
+3) `make board-xen-smoke`, host-copy `stage/board-xen-smoke/` to the SD boot
+partition, then `mmc dev 1; load mmc 1:1 0x88100000 boot.scr; source 0x88100000`.
+Gotchas: uppercase `RISCV` mkimage form; FAT/NLS exposes 8.3 aliases, so copy
+host-side and keep `xen.uimg` as a short-name fallback if `xen.uImage` aliases.
 Blockers: user-proven board DTB is not present in this checkout.

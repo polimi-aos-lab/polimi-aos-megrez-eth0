@@ -18,7 +18,7 @@ Decisions: `pm/adr/0001-architettura-build-env-e-mcp.md`.
 - **MCP**: TypeScript/Node running natively on the host; typed
   `deploy/boot/run/observe/reset`, real `board` backend over UART/ymodem, mock
   backend for offline serial scenarios.
-- **Xen smoke**: board-first U-Boot/USB payload (`board-xen-smoke`); QEMU `virt`
+- **Xen smoke**: board-first U-Boot/SD payload (`board-xen-smoke`); QEMU `virt`
   does not emulate the real NIC and is not the hardware gate.
 
 Sources pinned in `sources.lock`: BSP kernel `milkv-megrez/rockos-kernel`; Xen
@@ -31,8 +31,8 @@ Sources pinned in `sources.lock`: BSP kernel `milkv-megrez/rockos-kernel`; Xen
 - `make build-artifacts` — build Linux `Image(.gz)`, modules, initramfs, DTB.
 - `make build-xen` — build raw Xen and copy it to `stage/xen`.
 - `make assemble-boot` — create SD/U-Boot Linux payload in `stage/boot/`.
-- `make board-xen-smoke` — create U-Boot USB Xen dom0-less smoke payload in
-  `stage/board-xen-smoke/`.
+- `make board-xen-smoke` — create SD/U-Boot Xen dom0-less smoke payload in
+  `stage/board-xen-smoke/` (default `BOOT_IFACE=mmc BOOT_DEV=1 BOOT_PART=1`).
 
 ## Conventions
 

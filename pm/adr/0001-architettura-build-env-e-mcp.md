@@ -5,8 +5,8 @@
 - **Deciders:** vzaccaria
 - **Context tracker:** epics `polimi-aos-megrez-eth0-dvq`, `-60f`, `-sju`
 - **Amended:** 2026-07-04 — il target `qemu-xen-smoke` è sostituito da uno
-  smoke Xen **board-first** via U-Boot/USB (`board-xen-smoke`), perché esiste già
-  una sequenza U-Boot funzionante per Xen dom0-less sulla board. Amend 2026-07-02:
+  smoke Xen **board-first** via U-Boot/SD (`board-xen-smoke`), perché la board
+  non ha USB storage utilizzabile in U-Boot. Amend 2026-07-02:
   u-boot non si builda: Megrez lo ha già on-board, il piano usa solo `bootcmd` /
   boot script; Xen pinned da branch `latest`.
 
@@ -93,7 +93,7 @@ hardware:
 3. **Xen sul Megrez**: domU dom0-less, NIC eic7700 in passthrough via DT;
    l'agente cicla su hardware. (Fase 3)
 
-Lo smoke Xen non-MCP diventa **board-first**: si prepara un payload U-Boot/USB
+Lo smoke Xen non-MCP diventa **board-first**: si prepara un payload U-Boot/SD
 con binario Xen wrappato da `mkimage`, DTB base e moduli domU descritti sotto
 `/chosen`. QEMU `virt` resta opzionale per diagnosi della sola catena di boot,
 ma non è più il gate prima dell'hardware.
