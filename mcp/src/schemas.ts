@@ -1,5 +1,5 @@
 import { z } from 'zod/v4';
-import { boardPhaseValues, observeUntilValues, resetMethodValues } from './backend/types.js';
+import { boardPhaseValues, observeUntilValues, resetMethodValues, ubootLineEndingValues } from './backend/types.js';
 import { ErrorCode } from './result.js';
 
 const errorCodeValues = [
@@ -21,6 +21,8 @@ const IsoDateSchema = z.string().datetime({ offset: true });
 export const BoardPhaseSchema = z.enum(boardPhaseValues);
 export const ObserveUntilSchema = z.enum(observeUntilValues);
 export const ResetMethodSchema = z.enum(resetMethodValues);
+export const UbootLineEndingSchema = z.enum(ubootLineEndingValues);
+export const UbootStorageInterfaceSchema = z.enum(['mmc', 'usb']);
 export const ErrorCodeSchema = z.enum(errorCodeValues);
 
 export const LogEntrySchema = z.object({
@@ -121,6 +123,53 @@ export const runDataSchema = z.object({
   timedOut: z.boolean(),
 });
 
+export const ubootRunInputShape = {
+  lease: z.string().uuid(),
+  commands: z.array(z.string().min(1)).min(1),
+  timeoutMs: z.number().int().positive().optional(),
+  expect: z.string().min(1).optional(),
+  finalWaitForPrompt: z.boolean().optional(),
+  lineEnding: UbootLineEndingSchema.optional(),
+  charDelayMs: z.number().int().nonnegative().max(100).optional(),
+};
+export const UbootRunInputSchema = z.object(ubootRunInputShape);
+export type UbootRunInput = z.infer<typeof UbootRunInputSchema>;
+export const ubootRunDataSchema = z.object({
+  output: z.string(),
+  commands: z.array(z.object({
+    command: z.string(),
+    output: z.string(),
+    promptReached: z.boolean(),
+  })),
+  matched: z.boolean(),
+  timedOut: z.boolean(),
+});
+
+export const ubootFatwriteInputShape = {
+  lease: z.string().uuid(),
+  file: deployFileSchema,
+  destName: z.string().min(1).regex(/^[^/\s]+$/).optional(),
+  loadAddr: z.string().regex(/^0x[0-9a-fA-F]+$/).optional(),
+  interface: UbootStorageInterfaceSchema.optional(),
+  dev: z.number().int().nonnegative().optional(),
+  part: z.number().int().positive().optional(),
+  timeoutMs: z.number().int().positive().optional(),
+  verify: z.boolean().optional(),
+  lineEnding: UbootLineEndingSchema.optional(),
+  charDelayMs: z.number().int().nonnegative().max(100).optional(),
+};
+export const UbootFatwriteInputSchema = z.object(ubootFatwriteInputShape);
+export type UbootFatwriteInput = z.infer<typeof UbootFatwriteInputSchema>;
+export const ubootFatwriteDataSchema = z.object({
+  path: z.string(),
+  size: z.number().int().nonnegative(),
+  loadAddr: z.string(),
+  interface: UbootStorageInterfaceSchema,
+  dev: z.number().int().nonnegative(),
+  part: z.number().int().positive(),
+  verified: z.boolean(),
+});
+
 export const observeInputShape = {
   lease: z.string().uuid(),
   until: ObserveUntilSchema,
@@ -165,6 +214,8 @@ export const releaseOutputShape = opResultShape(releaseDataSchema);
 export const deployOutputShape = opResultShape(deployDataSchema);
 export const bootOutputShape = opResultShape(bootDataSchema);
 export const runOutputShape = opResultShape(runDataSchema);
+export const ubootRunOutputShape = opResultShape(ubootRunDataSchema);
+export const ubootFatwriteOutputShape = opResultShape(ubootFatwriteDataSchema);
 export const observeOutputShape = opResultShape(observeDataSchema);
 export const resetOutputShape = opResultShape(resetDataSchema);
 export const collectLogsOutputShape = opResultShape(collectLogsDataSchema);

@@ -20,6 +20,10 @@ import {
   resetOutputShape,
   runInputShape,
   runOutputShape,
+  ubootFatwriteInputShape,
+  ubootFatwriteOutputShape,
+  ubootRunInputShape,
+  ubootRunOutputShape,
 } from './schemas.js';
 
 export function createMcpServer(config: Config): McpServer {
@@ -90,6 +94,28 @@ export function createMcpServer(config: Config): McpServer {
       outputSchema: runOutputShape,
     },
     async (input) => mcpToolResult(await session.run(input)),
+  );
+
+  server.registerTool(
+    'uboot_run',
+    {
+      title: 'Run U-Boot commands',
+      description: 'Run paced U-Boot commands over the board UART, waiting for prompts by default and collecting raw UART via collect_logs.',
+      inputSchema: ubootRunInputShape,
+      outputSchema: ubootRunOutputShape,
+    },
+    async (input) => mcpToolResult(await session.ubootRun(input)),
+  );
+
+  server.registerTool(
+    'uboot_fatwrite',
+    {
+      title: 'Deploy file with U-Boot fatwrite',
+      description: 'At a U-Boot prompt, load one local file through YMODEM to RAM, fatwrite it to the boot FAT partition, and optionally verify the directory entry.',
+      inputSchema: ubootFatwriteInputShape,
+      outputSchema: ubootFatwriteOutputShape,
+    },
+    async (input) => mcpToolResult(await session.ubootFatwrite(input)),
   );
 
   server.registerTool(

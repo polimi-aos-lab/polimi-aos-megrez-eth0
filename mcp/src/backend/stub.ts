@@ -13,6 +13,10 @@ import type {
   ResetResult,
   RunRequest,
   RunResult,
+  UbootFatwriteRequest,
+  UbootFatwriteResult,
+  UbootRunRequest,
+  UbootRunResult,
 } from './types.js';
 
 const deferredByKind: Record<BackendKind, string> = {
@@ -46,6 +50,14 @@ export class StubBackend implements Backend {
 
   async run(_request: RunRequest, _context: OpContext): Promise<RunResult> {
     throw new NotImplementedError(`run deferred to bead ${deferredByKind[this.kind]}`);
+  }
+
+  async ubootRun(_request: UbootRunRequest, _context: OpContext): Promise<UbootRunResult> {
+    throw new NotImplementedError(`uboot_run deferred to bead ${deferredByKind[this.kind]}`);
+  }
+
+  async ubootFatwrite(_request: UbootFatwriteRequest, _context: OpContext): Promise<UbootFatwriteResult> {
+    throw new NotImplementedError(`uboot_fatwrite deferred to bead ${deferredByKind[this.kind]}`);
   }
 
   async observe(_request: ObserveRequest, _context: OpContext): Promise<ObserveResult> {

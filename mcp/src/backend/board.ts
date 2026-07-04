@@ -20,6 +20,13 @@ import type {
   ResetResult,
   RunRequest,
   RunResult,
+  UbootCommandResult,
+  UbootFatwriteRequest,
+  UbootFatwriteResult,
+  UbootLineEnding,
+  UbootRunRequest,
+  UbootRunResult,
+  UbootStorageInterface,
 } from './types.js';
 import {
   YMODEM_ACK,
@@ -43,6 +50,14 @@ interface BoardObserveOutcome {
   matched?: string;
 }
 
+const UBOOT_PROMPT_PATTERN = /(?:^|[\r\n])(?:=>|U-Boot>)\s*$/;
+const DEFAULT_UBOOT_LOAD_ADDR = '0x90000000';
+const DEFAULT_UBOOT_TIMEOUT_MS = 30_000;
+const DEFAULT_UBOOT_CHAR_DELAY_MS = 5;
+const DEFAULT_UBOOT_STORAGE_INTERFACE: UbootStorageInterface = 'mmc';
+const DEFAULT_UBOOT_STORAGE_DEV = 1;
+const DEFAULT_UBOOT_STORAGE_PART = 1;
+
 export class BoardBackend implements Backend {
   readonly kind: BackendKind = 'board';
   private port: SerialPortLike | undefined;
@@ -58,9 +73,10 @@ export class BoardBackend implements Backend {
       return;
     }
 
+    const serialPath = this.serialPath();
     const port = this.options.openPort === undefined
       ? new SerialPort({
-        path: this.options.serialPath,
+        path: serialPath,
         baudRate: this.options.baudRate,
         dataBits: 8,
         stopBits: 1,
@@ -74,7 +90,7 @@ export class BoardBackend implements Backend {
     await new Promise<void>((resolve, reject) => {
       port.open((error) => {
         if (error) {
-          reject(new DomainError(ErrorCode.SERIAL_UNAVAILABLE, `cannot open ${this.options.serialPath}: ${error.message}`, { retriable: true, cause: error }));
+          reject(new DomainError(ErrorCode.SERIAL_UNAVAILABLE, `cannot open ${serialPath}: ${error.message}`, { retriable: true, cause: error }));
           return;
         }
         resolve();
@@ -158,8 +174,88 @@ export class BoardBackend implements Backend {
       };
     });
   }
-  
 
+  async ubootRun(request: UbootRunRequest, context: OpContext): Promise<UbootRunResult> {
+    return await this.withContext(context, async () => {
+      await this.open();
+      await this.syncUbootPrompt(context, request.timeoutMs ?? 10_000);
+      const outputStart = this.rxText.length;
+      const timeoutMs = request.timeoutMs ?? DEFAULT_UBOOT_TIMEOUT_MS;
+      const lineEnding = request.lineEnding ?? 'cr';
+      const charDelayMs = request.charDelayMs ?? DEFAULT_UBOOT_CHAR_DELAY_MS;
+      const commandResults: UbootCommandResult[] = [];
+      let timedOut = false;
+
+      for (const [index, command] of request.commands.entries()) {
+        const waitForPrompt = index < request.commands.length - 1 || request.finalWaitForPrompt !== false;
+        const result = await this.executeUbootCommand(command, context, {
+          timeoutMs,
+          waitForPrompt,
+          lineEnding,
+          charDelayMs,
+          ...(index === request.commands.length - 1 && request.expect !== undefined && request.finalWaitForPrompt === false ? { expect: new RegExp(request.expect, 'm') } : {}),
+        });
+        commandResults.push(result);
+        if (!result.promptReached && waitForPrompt) {
+          timedOut = true;
+          break;
+        }
+      }
+
+      const output = this.cleanUbootTranscript(this.rxText.slice(outputStart));
+      const matched = request.expect === undefined ? !timedOut : new RegExp(request.expect, 'm').test(output);
+      if (request.expect !== undefined && !matched && request.finalWaitForPrompt === false) {
+        timedOut = true;
+      }
+      return { output, commands: commandResults, matched, timedOut };
+    });
+  }
+
+  async ubootFatwrite(request: UbootFatwriteRequest, context: OpContext): Promise<UbootFatwriteResult> {
+    return await this.withContext(context, async () => {
+      const file = await this.validateDeployFile(request.file);
+      const destName = this.assertPlainFatName(request.destName ?? basename(request.file.path));
+      const loadAddr = this.assertUbootAddress(request.loadAddr ?? DEFAULT_UBOOT_LOAD_ADDR);
+      const storageInterface = request.interface ?? DEFAULT_UBOOT_STORAGE_INTERFACE;
+      const dev = request.dev ?? DEFAULT_UBOOT_STORAGE_DEV;
+      const part = request.part ?? DEFAULT_UBOOT_STORAGE_PART;
+      const timeoutMs = request.timeoutMs ?? DEFAULT_UBOOT_TIMEOUT_MS;
+      const lineEnding = request.lineEnding ?? 'cr';
+      const charDelayMs = request.charDelayMs ?? DEFAULT_UBOOT_CHAR_DELAY_MS;
+
+      await this.open();
+      await this.syncUbootPrompt(context, timeoutMs);
+      if (storageInterface === 'usb') {
+        const usb = await this.executeUbootCommand('usb start', context, { timeoutMs, waitForPrompt: true, lineEnding, charDelayMs });
+        this.assertUbootCommandSucceeded('usb start', usb.output);
+      }
+      const select = await this.executeUbootCommand(`${storageInterface} dev ${dev}`, context, { timeoutMs, waitForPrompt: true, lineEnding, charDelayMs });
+      this.assertUbootCommandSucceeded(`${storageInterface} dev ${dev}`, select.output);
+
+      await this.loadYmodemToRam(loadAddr, destName, file.data, context, { timeoutMs, lineEnding, charDelayMs });
+      const sizeHex = `0x${file.data.byteLength.toString(16)}`;
+      const fatwrite = await this.executeUbootCommand(
+        `fatwrite ${storageInterface} ${dev}:${part} ${loadAddr} ${destName} ${sizeHex}`,
+        context,
+        { timeoutMs, waitForPrompt: true, lineEnding, charDelayMs },
+      );
+      this.assertUbootCommandSucceeded('fatwrite', fatwrite.output);
+
+      const verify = request.verify ?? true;
+      if (verify) {
+        const listing = await this.executeUbootCommand(`fatls ${storageInterface} ${dev}:${part}`, context, {
+          timeoutMs,
+          waitForPrompt: true,
+          lineEnding,
+          charDelayMs,
+        });
+        this.assertUbootCommandSucceeded('fatls', listing.output);
+        this.assertFatlsEntry(destName, file.data.byteLength, listing.output);
+      }
+
+      return { path: destName, size: file.data.byteLength, loadAddr, interface: storageInterface, dev, part, verified: verify };
+    });
+  }
   async observe(request: ObserveRequest, context: OpContext): Promise<ObserveResult> {
     return await this.withContext(context, async () => {
       const outcome = await this.observeUntil(request, context);
@@ -213,23 +309,170 @@ export class BoardBackend implements Backend {
     await this.writeText('rz -y\n', context);
     await this.waitForByte(YMODEM_C, 30_000, context.signal, startCursor);
     const frames = buildYmodemFrames(name, data);
+    let replyStart = this.rxBytes.length;
     await this.writeBytes(frames.header, context);
-    await this.waitForByte(YMODEM_ACK, 10_000, context.signal);
+    await this.waitForByte(YMODEM_ACK, 10_000, context.signal, replyStart);
     await this.waitForByte(YMODEM_C, 10_000, context.signal);
     for (const block of frames.dataBlocks) {
+      replyStart = this.rxBytes.length;
       await this.writeBytes(block, context);
-      await this.waitForByte(YMODEM_ACK, 30_000, context.signal);
+      await this.waitForByte(YMODEM_ACK, 30_000, context.signal, replyStart);
     }
+    replyStart = this.rxBytes.length;
     await this.writeBytes(Uint8Array.of(YMODEM_EOT), context);
-    const eotReply = await this.waitForAnyByte([YMODEM_ACK, YMODEM_NAK], 10_000, context.signal);
+    const eotReply = await this.waitForAnyByte([YMODEM_ACK, YMODEM_NAK], 10_000, context.signal, replyStart);
     if (eotReply === YMODEM_NAK) {
+      replyStart = this.rxBytes.length;
       await this.writeBytes(Uint8Array.of(YMODEM_EOT), context);
-      await this.waitForByte(YMODEM_ACK, 10_000, context.signal);
+      await this.waitForByte(YMODEM_ACK, 10_000, context.signal, replyStart);
     }
-    await this.waitForAnyByte([YMODEM_C, YMODEM_ACK], 10_000, context.signal);
+    await this.waitForAnyByte([YMODEM_C, YMODEM_ACK], 10_000, context.signal, replyStart);
+    replyStart = this.rxBytes.length;
     await this.writeBytes(frames.end, context);
-    await this.waitForByte(YMODEM_ACK, 10_000, context.signal);
+    await this.waitForByte(YMODEM_ACK, 10_000, context.signal, replyStart);
     return { path: name, size: data.byteLength };
+  }
+
+  private async executeUbootCommand(
+    command: string,
+    context: OpContext,
+    options: {
+      timeoutMs: number;
+      waitForPrompt: boolean;
+      lineEnding: UbootLineEnding;
+      charDelayMs: number;
+      expect?: RegExp;
+    },
+  ): Promise<{ command: string; output: string; promptReached: boolean }> {
+    const start = this.rxText.length;
+    await this.writeUbootCommand(command, context, options.lineEnding, options.charDelayMs);
+    if (!options.waitForPrompt) {
+      if (options.expect !== undefined) {
+        const outcome = await this.waitForPattern(options.expect, start, options.timeoutMs, context);
+        return { command, output: this.stripUbootCommandOutput(this.rxText.slice(start), command), promptReached: outcome.phase === 'uboot' };
+      }
+      return { command, output: this.stripUbootCommandOutput(this.rxText.slice(start), command), promptReached: false };
+    }
+
+    const promptReached = await this.waitForUbootPrompt(start, options.timeoutMs, context.signal);
+    return { command, output: this.stripUbootCommandOutput(this.rxText.slice(start), command), promptReached };
+  }
+
+  private async loadYmodemToRam(
+    loadAddr: string,
+    destName: string,
+    data: Uint8Array,
+    context: OpContext,
+    options: { timeoutMs: number; lineEnding: UbootLineEnding; charDelayMs: number },
+  ): Promise<void> {
+    const startCursor = this.rxBytes.length;
+    const textStart = this.rxText.length;
+    await this.writeUbootCommand(`loady ${loadAddr}`, context, options.lineEnding, options.charDelayMs);
+    await this.waitForByte(YMODEM_C, options.timeoutMs, context.signal, startCursor);
+    const frames = buildYmodemFrames(destName, data);
+
+    let replyStart = this.rxBytes.length;
+    await this.writeBytes(frames.header, context);
+    await this.waitForByte(YMODEM_ACK, 10_000, context.signal, replyStart);
+    await this.waitForByte(YMODEM_C, 10_000, context.signal, replyStart);
+    for (const block of frames.dataBlocks) {
+      replyStart = this.rxBytes.length;
+      await this.writeBytes(block, context);
+      await this.waitForByte(YMODEM_ACK, options.timeoutMs, context.signal, replyStart);
+    }
+
+    replyStart = this.rxBytes.length;
+    await this.writeBytes(Uint8Array.of(YMODEM_EOT), context);
+    const eotReply = await this.waitForAnyByte([YMODEM_ACK, YMODEM_NAK], 10_000, context.signal, replyStart);
+    if (eotReply === YMODEM_NAK) {
+      replyStart = this.rxBytes.length;
+      await this.writeBytes(Uint8Array.of(YMODEM_EOT), context);
+      await this.waitForByte(YMODEM_ACK, 10_000, context.signal, replyStart);
+    }
+
+    await this.waitForAnyByte([YMODEM_C, YMODEM_ACK], 10_000, context.signal, replyStart);
+    replyStart = this.rxBytes.length;
+    await this.writeBytes(frames.end, context);
+    await this.waitForByte(YMODEM_ACK, 10_000, context.signal, replyStart);
+    await this.waitForUbootPrompt(textStart, options.timeoutMs, context.signal);
+  }
+
+  private async syncUbootPrompt(context: OpContext, timeoutMs: number): Promise<void> {
+    const start = this.rxText.length;
+    await this.writeText('\r', context);
+    const reached = await this.waitForUbootPrompt(start, timeoutMs, context.signal);
+    if (!reached) {
+      throw new DomainError(ErrorCode.TIMEOUT, 'timed out waiting for U-Boot prompt', { retriable: true });
+    }
+    context.setPhase('uboot');
+  }
+
+  private async waitForUbootPrompt(fromTextOffset: number, timeoutMs: number, signal: AbortSignal): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (UBOOT_PROMPT_PATTERN.test(this.rxText.slice(fromTextOffset))) {
+        return true;
+      }
+      await this.waitForData(Math.max(1, deadline - Date.now()), signal);
+    }
+    return false;
+  }
+
+  private async writeUbootCommand(command: string, context: OpContext, lineEnding: UbootLineEnding, charDelayMs: number): Promise<void> {
+    const ending = lineEnding === 'cr' ? '\r' : lineEnding === 'lf' ? '\n' : '\r\n';
+    const line = `${command}${ending}`;
+    if (charDelayMs <= 0) {
+      await this.writeText(line, context);
+      return;
+    }
+    for (const char of line) {
+      await this.writeText(char, context);
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, charDelayMs).unref();
+      });
+    }
+  }
+
+  private async validateDeployFile(file: DeployFile): Promise<{ data: Buffer }> {
+    const data = await readFile(file.path);
+    if (file.size !== undefined && data.byteLength !== file.size) {
+      throw new DomainError(ErrorCode.DEPLOY_VERIFY_FAILED, `source size mismatch for ${file.path}: expected ${file.size}, got ${data.byteLength}`, { retriable: true });
+    }
+    if (file.sha256 !== undefined) {
+      const digest = createHash('sha256').update(data).digest('hex');
+      if (digest.toLowerCase() !== file.sha256.toLowerCase()) {
+        throw new DomainError(ErrorCode.DEPLOY_VERIFY_FAILED, `source sha256 mismatch for ${file.path}`, { retriable: true });
+      }
+    }
+    return { data };
+  }
+
+  private assertPlainFatName(name: string): string {
+    if (!/^[^/\s]+$/.test(name)) {
+      throw new DomainError(ErrorCode.BAD_STATE, `U-Boot fatwrite destination must be a plain filename: ${name}`, { retriable: false });
+    }
+    return name;
+  }
+
+  private assertUbootAddress(address: string): string {
+    if (!/^0x[0-9a-fA-F]+$/.test(address)) {
+      throw new DomainError(ErrorCode.BAD_STATE, `U-Boot load address must be hexadecimal: ${address}`, { retriable: false });
+    }
+    return address;
+  }
+
+  private assertUbootCommandSucceeded(label: string, output: string): void {
+    if (/\b(?:Unknown command|Usage:|Error|Unable|fail(?:ed)?|not found|Bad)\b/i.test(output)) {
+      throw new DomainError(ErrorCode.BAD_STATE, `U-Boot ${label} failed`, { retriable: true, detail: output });
+    }
+  }
+
+  private assertFatlsEntry(name: string, size: number, output: string): void {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const entryPattern = new RegExp(`(^|\\s)${size}\\s+${escaped}(\\s|$)`, 'm');
+    if (!entryPattern.test(output)) {
+      throw new DomainError(ErrorCode.DEPLOY_VERIFY_FAILED, `fatls did not show ${name} with size ${size}`, { retriable: true, detail: output });
+    }
   }
 
   private async observeUntil(request: ObserveRequest, context: OpContext): Promise<BoardObserveOutcome> {
@@ -376,6 +619,38 @@ export class BoardBackend implements Backend {
       lines.shift();
     }
     return lines.join('\n').replace(/\n?~ #\s*$/, '').trim();
+  }
+
+  private stripUbootCommandOutput(rawOutput: string, command: string): string {
+    const normalized = this.cleanUbootTranscript(rawOutput);
+    const lines = normalized.split('\n');
+    while (lines.length > 0 && lines[0]?.trim().length === 0) {
+      lines.shift();
+    }
+    if (lines[0]?.trim() === command.trim()) {
+      lines.shift();
+    }
+    return lines
+      .join('\n')
+      .replace(/(?:^|\n)(?:=>|U-Boot>)\s*$/g, '')
+      .trim();
+  }
+
+  private cleanUbootTranscript(text: string): string {
+    return text
+      .replace(/\r/g, '')
+      .replace(/\u0001/g, '<SOH>')
+      .replace(/\u0002/g, '<STX>')
+      .replace(/\u0004/g, '<EOT>')
+      .replace(/\u0006/g, '<ACK>')
+      .replace(/\u0015/g, '<NAK>');
+  }
+
+  private serialPath(): string {
+    if (process.platform === 'darwin' && this.options.serialPath.includes('/dev/tty.')) {
+      return this.options.serialPath.replace('/dev/tty.', '/dev/cu.');
+    }
+    return this.options.serialPath;
   }
 
   private async withContext<T>(context: OpContext, operation: () => Promise<T>): Promise<T> {

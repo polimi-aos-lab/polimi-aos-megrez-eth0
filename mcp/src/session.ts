@@ -15,6 +15,10 @@ import type {
   ResetResult,
   RunRequest,
   RunResult,
+  UbootFatwriteRequest,
+  UbootFatwriteResult,
+  UbootRunRequest,
+  UbootRunResult,
 } from './backend/types.js';
 import { LeaseManager, Mutex } from './lock.js';
 import { LogBuffer } from './logbuf.js';
@@ -28,6 +32,8 @@ import type {
   ReleaseInput,
   ResetInput,
   RunInput,
+  UbootFatwriteInput,
+  UbootRunInput,
 } from './schemas.js';
 
 export interface BoardSessionOptions {
@@ -131,6 +137,38 @@ export class BoardSession {
       ...(input.expect === undefined ? {} : { expect: input.expect }),
     };
     return this.withBackendOp('run', input.lease, input.timeoutMs, (context) => this.backend.run(request, context));
+  }
+
+  ubootRun(input: UbootRunInput): Promise<OpResult<UbootRunResult>> {
+    const request: UbootRunRequest = {
+      commands: input.commands,
+      ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
+      ...(input.expect === undefined ? {} : { expect: input.expect }),
+      ...(input.finalWaitForPrompt === undefined ? {} : { finalWaitForPrompt: input.finalWaitForPrompt }),
+      ...(input.lineEnding === undefined ? {} : { lineEnding: input.lineEnding }),
+      ...(input.charDelayMs === undefined ? {} : { charDelayMs: input.charDelayMs }),
+    };
+    return this.withBackendOp('uboot_run', input.lease, input.timeoutMs, (context) => this.backend.ubootRun(request, context));
+  }
+
+  ubootFatwrite(input: UbootFatwriteInput): Promise<OpResult<UbootFatwriteResult>> {
+    const request: UbootFatwriteRequest = {
+      file: {
+        path: input.file.path,
+        ...(input.file.sha256 === undefined ? {} : { sha256: input.file.sha256 }),
+        ...(input.file.size === undefined ? {} : { size: input.file.size }),
+      },
+      ...(input.destName === undefined ? {} : { destName: input.destName }),
+      ...(input.loadAddr === undefined ? {} : { loadAddr: input.loadAddr }),
+      ...(input.interface === undefined ? {} : { interface: input.interface }),
+      ...(input.dev === undefined ? {} : { dev: input.dev }),
+      ...(input.part === undefined ? {} : { part: input.part }),
+      ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
+      ...(input.verify === undefined ? {} : { verify: input.verify }),
+      ...(input.lineEnding === undefined ? {} : { lineEnding: input.lineEnding }),
+      ...(input.charDelayMs === undefined ? {} : { charDelayMs: input.charDelayMs }),
+    };
+    return this.withBackendOp('uboot_fatwrite', input.lease, input.timeoutMs, (context) => this.backend.ubootFatwrite(request, context));
   }
 
   observe(input: ObserveInput): Promise<OpResult<ObserveResult>> {

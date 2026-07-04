@@ -19,6 +19,10 @@ import type {
   ResetResult,
   RunRequest,
   RunResult,
+  UbootFatwriteRequest,
+  UbootFatwriteResult,
+  UbootRunRequest,
+  UbootRunResult,
 } from './types.js';
 import { YMODEM_ACK, YMODEM_C, YMODEM_EOT, YMODEM_NAK, YMODEM_SOH, YMODEM_STX } from './ymodem.js';
 import { DomainError, ErrorCode, NotImplementedError } from '../result.js';
@@ -110,6 +114,9 @@ class ScenarioEngine {
   phase: BoardPhase = 'uboot';
   private port: ScriptedSerialPort | undefined;
   private ymodemState: 'idle' | 'header' | 'data' | 'second-eot' | 'end-header' = 'idle';
+  private commandBuffer = '';
+  private ymodemSize = 0;
+  private readonly fatFiles = new Map<string, number>();
 
   constructor(readonly scenario: MockScenario, private readonly delayMs: number) {}
 
@@ -122,6 +129,12 @@ class ScenarioEngine {
   }
 
   onTx(data: Buffer): void {
+    const firstByte = data[0];
+    if (firstByte === YMODEM_SOH || firstByte === YMODEM_STX || firstByte === YMODEM_EOT) {
+      this.onYmodemTx(data);
+      return;
+    }
+
     const text = data.toString('utf8');
     if (text.includes('rz -y')) {
       this.ymodemState = 'header';
@@ -129,20 +142,18 @@ class ScenarioEngine {
       return;
     }
 
-    const firstByte = data[0];
-    if (firstByte === YMODEM_SOH || firstByte === YMODEM_STX || firstByte === YMODEM_EOT) {
-      this.onYmodemTx(firstByte);
-      return;
-    }
-
-    if (/(^|\n)(boot|run bootcmd)\s*\n/.test(text)) {
-      this.onBootCommand();
-      return;
-    }
-
     const markerMatch = /\(([^]*)\); printf '\\n(__MCP_EXIT_[0-9a-f]+):%s\\n' "\$\?"\n/.exec(text);
     if (markerMatch !== null) {
       this.onRunCommand(markerMatch[1] ?? '', markerMatch[2] ?? '__MCP_EXIT_missing');
+      return;
+    }
+
+    this.commandBuffer += text;
+    while (/[\r\n]/.test(this.commandBuffer)) {
+      const splitAt = this.commandBuffer.search(/[\r\n]/);
+      const rawLine = this.commandBuffer.slice(0, splitAt);
+      this.commandBuffer = this.commandBuffer.slice(splitAt + 1).replace(/^[\r\n]+/, '');
+      this.onUbootCommand(rawLine.trim());
     }
   }
 
@@ -220,8 +231,58 @@ class ScenarioEngine {
     this.emit(`${command}\r\n${output}${noise}\r\n${marker}:${rc}\r\n~ # `);
   }
 
-  private onYmodemTx(firstByte: number): void {
+  private onUbootCommand(command: string): void {
+    if (command.length === 0) {
+      this.emit('\r\n=> ');
+      return;
+    }
+    if (command === 'boot' || command === 'run bootcmd' || command.startsWith('source ')) {
+      this.onBootCommand();
+      return;
+    }
+    if (/^mmc dev \d+$/.test(command)) {
+      const dev = command.split(/\s+/)[2] ?? '0';
+      this.emit(`${command}\r\nswitch to partitions #0, OK\r\nmmc${dev} is current device\r\n=> `);
+      return;
+    }
+    if (command === 'usb start') {
+      this.emit(`${command}\r\nscanning bus usb@50490000 for devices... 3 USB Device(s) found\r\n=> `);
+      return;
+    }
+    if (/^usb dev \d+$/.test(command)) {
+      this.emit(`${command}\r\nUSB device ${command.split(/\s+/)[2] ?? '0'} is current device\r\n=> `);
+      return;
+    }
+    if (command.startsWith('loady ')) {
+      this.ymodemState = 'header';
+      this.ymodemSize = 0;
+      this.emit(`${command}\r\n## Ready for binary (ymodem) download to ${command.split(/\s+/)[1] ?? '0x0'} at 115200 bps...\r\n`);
+      this.emitBytes(Uint8Array.of(YMODEM_C));
+      return;
+    }
+    const fatwrite = /^fatwrite\s+(mmc|usb)\s+(\d+):(\d+)\s+0x[0-9a-fA-F]+\s+(\S+)\s+(0x[0-9a-fA-F]+|\d+)$/.exec(command);
+    if (fatwrite !== null) {
+      const name = fatwrite[4] ?? 'unknown.bin';
+      const sizeText = fatwrite[5] ?? '0';
+      const size = sizeText.startsWith('0x') ? Number.parseInt(sizeText.slice(2), 16) : Number.parseInt(sizeText, 10);
+      this.fatFiles.set(name, size);
+      this.emit(`${command}\r\n${size} bytes written in 24 ms\r\n=> `);
+      return;
+    }
+    if (/^fatls\s+(mmc|usb)\s+\d+:\d+/.test(command)) {
+      const entries = [...this.fatFiles.entries()]
+        .map(([name, size]) => ` ${size.toString().padStart(10)}   ${name}\r\n`)
+        .join('');
+      this.emit(`${command}\r\n${entries}${this.fatFiles.size} file(s), 0 dir(s)\r\n=> `);
+      return;
+    }
+    this.emit(`${command}\r\nUnknown command '${command.split(/\s+/)[0] ?? command}' - try 'help'\r\n=> `);
+  }
+
+  private onYmodemTx(data: Buffer): void {
+    const firstByte = data[0];
     if (this.ymodemState === 'header' && firstByte === YMODEM_SOH) {
+      this.ymodemSize = this.parseYmodemSize(data);
       this.ymodemState = 'data';
       this.emitBytes(Uint8Array.of(YMODEM_ACK, YMODEM_C));
       return;
@@ -243,7 +304,15 @@ class ScenarioEngine {
     if (this.ymodemState === 'end-header' && firstByte === YMODEM_SOH) {
       this.ymodemState = 'idle';
       this.emitBytes(Uint8Array.of(YMODEM_ACK));
+      this.emit(`\r\n## Total Size      = 0x${this.ymodemSize.toString(16)} = ${this.ymodemSize} Bytes\r\n=> `);
     }
+  }
+
+  private parseYmodemSize(data: Buffer): number {
+    const metadata = data.subarray(3, 3 + 128).toString('utf8').replace(/\0+$/, '');
+    const fields = metadata.split('\0');
+    const parsed = Number.parseInt(fields[1] ?? '0', 10);
+    return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
   }
 
   private emit(text: string): void {
@@ -320,6 +389,14 @@ export class MockBackend implements Backend {
       throw new DomainError(ErrorCode.BAD_STATE, `mock board is not at a Linux shell: ${this.engine.phase}`, { retriable: true });
     }
     return await this.board.run(request, context);
+  }
+
+  async ubootRun(request: UbootRunRequest, context: OpContext): Promise<UbootRunResult> {
+    return await this.board.ubootRun(request, context);
+  }
+
+  async ubootFatwrite(request: UbootFatwriteRequest, context: OpContext): Promise<UbootFatwriteResult> {
+    return await this.board.ubootFatwrite(request, context);
   }
 
   async observe(request: ObserveRequest, context: OpContext): Promise<ObserveResult> {

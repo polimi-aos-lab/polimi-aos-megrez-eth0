@@ -10,6 +10,11 @@ export type ObserveUntil = (typeof observeUntilValues)[number];
 export const resetMethodValues = ['auto', 'reboot', 'sysrq', 'sbi', 'hardware'] as const;
 export type ResetMethod = (typeof resetMethodValues)[number];
 
+export const ubootLineEndingValues = ['cr', 'lf', 'crlf'] as const;
+export type UbootLineEnding = (typeof ubootLineEndingValues)[number];
+
+export type UbootStorageInterface = 'mmc' | 'usb';
+
 export interface LogEntry {
   seq: number;
   ts: string;
@@ -71,6 +76,51 @@ export interface RunResult {
   timedOut: boolean;
 }
 
+export interface UbootRunRequest {
+  commands: string[];
+  timeoutMs?: number;
+  expect?: string;
+  finalWaitForPrompt?: boolean;
+  lineEnding?: UbootLineEnding;
+  charDelayMs?: number;
+}
+
+export interface UbootCommandResult {
+  command: string;
+  output: string;
+  promptReached: boolean;
+}
+
+export interface UbootRunResult {
+  output: string;
+  commands: UbootCommandResult[];
+  matched: boolean;
+  timedOut: boolean;
+}
+
+export interface UbootFatwriteRequest {
+  file: DeployFile;
+  destName?: string;
+  loadAddr?: string;
+  interface?: UbootStorageInterface;
+  dev?: number;
+  part?: number;
+  timeoutMs?: number;
+  verify?: boolean;
+  lineEnding?: UbootLineEnding;
+  charDelayMs?: number;
+}
+
+export interface UbootFatwriteResult {
+  path: string;
+  size: number;
+  loadAddr: string;
+  interface: UbootStorageInterface;
+  dev: number;
+  part: number;
+  verified: boolean;
+}
+
 export interface ObserveRequest {
   until: ObserveUntil;
   pattern?: string;
@@ -100,6 +150,8 @@ export interface Backend {
   deploy(request: DeployRequest, context: OpContext): Promise<DeployResult>;
   boot(request: BootRequest, context: OpContext): Promise<BootResult>;
   run(request: RunRequest, context: OpContext): Promise<RunResult>;
+  ubootRun(request: UbootRunRequest, context: OpContext): Promise<UbootRunResult>;
+  ubootFatwrite(request: UbootFatwriteRequest, context: OpContext): Promise<UbootFatwriteResult>;
   observe(request: ObserveRequest, context: OpContext): Promise<ObserveResult>;
   reset(request: ResetRequest, context: OpContext): Promise<ResetResult>;
 }
