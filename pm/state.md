@@ -25,7 +25,7 @@ Written: 2026-07-04 · assistant
 Done: pivoted `60f.4` from QEMU to board-first Xen smoke; added
 `scripts/build-xen.sh` + `make build-xen` for raw Xen and
 `scripts/board-xen-smoke.sh` + `make board-xen-smoke` for the board-proven U-Boot
-flow (`mkimage -A RISCV ... xen.uImage`, DTB at `0x94200000`, Xen at
+flow (`mkimage -A RISCV ... xen.img` by default, DTB at `0x94200000`, Xen at
 `0x95200000`, Linux domU kernel+initramfs modules, `vsbi_uart`). Recorded bd
 memories for the U-Boot script and mkimage CLI; updated PM readme and ADR.
 State: `bash -n`, script `--help`, `make -n build-xen`, `make -n board-xen-smoke`,
@@ -36,5 +36,5 @@ user-proven board DTB if different from `stage/eic7700-milkv-megrez.dtb`
 3) `make board-xen-smoke`, host-copy `stage/board-xen-smoke/` to the SD boot
 partition, then `mmc dev 1; load mmc 1:1 0x88100000 boot.scr; source 0x88100000`.
 Gotchas: uppercase `RISCV` mkimage form; FAT/NLS exposes 8.3 aliases, so copy
-host-side and keep `xen.uimg` as a short-name fallback if `xen.uImage` aliases.
+host-side and keep default `xen.img` unless regenerating with `XEN_DEPLOY_NAME=xen.uImage`.
 Blockers: user-proven board DTB is not present in this checkout.
