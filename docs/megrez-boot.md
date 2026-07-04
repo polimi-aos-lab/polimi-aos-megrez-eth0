@@ -25,7 +25,8 @@ stage/boot/
 
 `boot.cmd` sets Linux bootargs including `panic=-1` and
 `sysrq_always_enabled=1`. The generated initramfs embeds the minimal module
-closure for `dwmac-win2030` plus `/root/nic-bringup.sh`.
+closure for `dwmac-win2030`, auto-runs `/usr/sbin/megrez-net-up` before the
+shell, and keeps `/root/nic-bringup.sh` as a retry/debug command.
 
 To change the U-Boot SD enumeration, run:
 
@@ -35,8 +36,9 @@ BOOT_DEV=0 BOOT_PART=1 ./scripts/assemble-boot.sh
 
 ## Copy to SD
 
-Use an SD card with an ext4 partition 1. Replace `/dev/sdX1` with the actual
-partition.
+Use an SD card whose partition 1 is readable by the on-board U-Boot (the tested
+Megrez card is FAT; ext4 is also fine if U-Boot can list it). Replace
+`/dev/sdX1` with the actual partition.
 
 ```sh
 sudo mkdir -p /mnt/megrez-boot
@@ -45,6 +47,11 @@ sudo cp -a stage/boot/. /mnt/megrez-boot/
 sync
 sudo umount /mnt/megrez-boot
 ```
+
+Prefer copying from the host OS. If you update the FAT partition from this
+initramfs, it may mount as `msdos` without long-filename support; in that mode a
+write to `initramfs-megrez.cpio.gz` can create a new 8.3 alias instead of
+overwriting the file U-Boot resolves from `/initramfs-megrez.cpio.gz`.
 
 ## Serial console
 
@@ -108,14 +115,15 @@ saveenv
 
 ## Linux/NIC smoke check
 
-At the initramfs shell:
+At the initramfs shell the assembled image has already attempted to load the
+Ethernet modules and run `ip link set ... up` for `eth0`/`eth1`. Check it with:
 
 ```sh
 cat /proc/cmdline
 cat /proc/sys/kernel/sysrq
-/root/nic-bringup.sh
 lsmod
 ip link
+/root/nic-bringup.sh   # retry/debug path
 ```
 
 Acceptance evidence for this bead:
@@ -125,11 +133,13 @@ Acceptance evidence for this bead:
 - `dwmac_win2030`/`stmmac` modules load without fatal probe errors.
 - `ip link` shows the Megrez Ethernet interface(s), typically `eth0` and/or
   `eth1`; link carrier requires a connected cable.
-- With a live LAN, bring one interface up and verify ping:
+- With a live LAN, request DHCP and verify ping. The assembled initramfs includes
+  the BusyBox `udhcpc` default script so the lease installs an address and
+  default route:
 
 ```sh
-ip link set eth0 up
-udhcpc -i eth0
+udhcpc -i eth0 -n -q
 ip addr show eth0
+ip route
 ping -c 3 <lan-peer-ip>
 ```

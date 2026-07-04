@@ -242,8 +242,8 @@ log() {
 }
 
 is_mounted() {
-    local_mountpoint=$1
-    [ -r /proc/mounts ] && grep -q "^[^ ]* ${local_mountpoint} " /proc/mounts
+    mountpoint=$1
+    [ -r /proc/mounts ] && grep -q "^[^ ]* ${mountpoint} " /proc/mounts
 }
 
 mount_runtime_fs() {
@@ -297,6 +297,17 @@ first_non_loopback() {
     return 1
 }
 
+bring_up_iface() {
+    iface=$1
+
+    [ -d "/sys/class/net/${iface}" ] || return 0
+    if ip link set dev "${iface}" up >/dev/null 2>&1; then
+        log "brought up ${iface}"
+    else
+        log "failed to bring up ${iface}"
+    fi
+}
+
 mount_runtime_fs
 
 [ -w /proc/sys/kernel/sysrq ] && echo 1 > /proc/sys/kernel/sysrq 2>/dev/null || true
@@ -318,14 +329,19 @@ load_module stmmac
 load_module stmmac-platform
 load_module dwmac_win2030 dwmac-win2030
 
-for iface in eth0 eth1 "$(first_non_loopback || true)"; do
-    [ -n "${iface}" ] || continue
-    [ -d "/sys/class/net/${iface}" ] || continue
-    log "bringing up ${iface}"
-done
-
 if command -v ip >/dev/null 2>&1; then
+    seen_ifaces=
+    for iface in eth0 eth1 "$(first_non_loopback || true)"; do
+        [ -n "${iface}" ] || continue
+        case " ${seen_ifaces} " in
+            *" ${iface} "*) continue ;;
+        esac
+        seen_ifaces="${seen_ifaces} ${iface}"
+        bring_up_iface "${iface}"
+    done
     ip link show 2>/dev/null || true
+else
+    log "ip not found; skipping interface bring-up"
 fi
 
 if command -v dmesg >/dev/null 2>&1; then
@@ -334,6 +350,77 @@ fi
 EOF
     chmod 0755 "${output}"
 }
+
+write_udhcpc_default_script() {
+    local output=${1:?output path required}
+
+    mkdir -p -- "$(dirname -- "${output}")"
+    cat > "${output}" <<'EOF'
+#!/bin/sh
+set -u
+
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export PATH
+
+[ -n "${interface:-}" ] || exit 0
+
+case "${1:-}" in
+    deconfig)
+        ifconfig "${interface}" 0.0.0.0 2>/dev/null || true
+        ;;
+    bound|renew)
+        broadcast_arg=
+        netmask_arg=
+        [ -n "${broadcast:-}" ] && broadcast_arg="broadcast ${broadcast}"
+        [ -n "${subnet:-}" ] && netmask_arg="netmask ${subnet}"
+
+        ifconfig "${interface}" "${ip}" ${broadcast_arg} ${netmask_arg} up
+
+        if [ -n "${router:-}" ]; then
+            while route del default dev "${interface}" 2>/dev/null; do :; done
+            for gateway in ${router}; do
+                route add default gw "${gateway}" dev "${interface}" 2>/dev/null && break
+            done
+        fi
+
+        if [ -n "${dns:-}" ]; then
+            mkdir -p /etc
+            : > /etc/resolv.conf
+            for nameserver in ${dns}; do
+                printf 'nameserver %s\n' "${nameserver}" >> /etc/resolv.conf
+            done
+        fi
+        ;;
+esac
+EOF
+    chmod 0755 "${output}"
+}
+
+patch_init_for_nic_bringup() {
+    local init_file=${1:?init file required}
+    local init_patched="${init_file}.patched"
+
+    if grep -q 'megrez-net-up || true' "${init_file}"; then
+        return 0
+    fi
+    if ! grep -q '^exec /bin/sh$' "${init_file}"; then
+        fail "expected exec /bin/sh in ${init_file}"
+    fi
+
+    awk '
+        BEGIN { inserted = 0 }
+        {
+            if (!inserted && $0 == "exec /bin/sh") {
+                print "[ -x /usr/sbin/megrez-net-up ] && /usr/sbin/megrez-net-up || true"
+                inserted = 1
+            }
+            print
+        }
+    ' "${init_file}" > "${init_patched}" || fail "failed to patch ${init_file}"
+    chmod 0755 "${init_patched}"
+    mv -- "${init_patched}" "${init_file}"
+}
+
 
 build_initramfs() {
     local output=${1:?output initramfs required}
@@ -355,8 +442,12 @@ build_initramfs() {
         log "embedding NIC module closure for ${release}"
         copy_nic_modules "${release_dir}" "${tmp_root}/lib/modules/${release}"
         write_nic_helper "${tmp_root}/usr/sbin/megrez-net-up"
+        write_udhcpc_default_script "${tmp_root}/usr/share/udhcpc/default.script"
         mkdir -p -- "${tmp_root}/root"
         cp -f -- "${tmp_root}/usr/sbin/megrez-net-up" "${tmp_root}/root/nic-bringup.sh"
+        if [ -x "${tmp_root}/usr/sbin/megrez-net-up" ]; then
+            patch_init_for_nic_bringup "${tmp_root}/init"
+        fi
     fi
 
     log "packing $(basename -- "${output}")"
@@ -367,6 +458,7 @@ build_initramfs() {
     require_file "${output}"
     rm -rf -- "${tmp_root}"
 }
+
 
 write_boot_cmd() {
     local output=${1:?boot.cmd output required}
@@ -430,8 +522,10 @@ Linux smoke commands
 --------------------
 cat /proc/cmdline
 cat /proc/sys/kernel/sysrq
-/root/nic-bringup.sh
-ip link
+ip link              # automatic NIC bring-up should already show eth0/eth1 UP
+/root/nic-bringup.sh # retry/debug if the automatic NIC bring-up needs another pass
+udhcpc -i eth0 -n -q # with a live LAN, should install address/default route
+ping -c 3 <lan-peer-ip>
 EOF
 }
 
@@ -441,6 +535,7 @@ main() {
     local initramfs_src="${stage_dir}/${initramfs_name}"
     local release=""
 
+    require_command awk
     require_command cpio
     require_command find
     require_command gzip
