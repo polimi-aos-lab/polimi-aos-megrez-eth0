@@ -15,22 +15,26 @@ elif [ -f "${stage_dir}/hifive-premier-550-plain.dtb" ]; then
 else
     board_dtb="${stage_dir}/eic7700-milkv-megrez.dtb"
 fi
-domu1_image=${DOMU1_IMAGE:-"${stage_dir}/irqlat.bin"}
-domu2_image=${DOMU2_IMAGE:-}
+domu1_kernel=${DOMU1_KERNEL:-${DOMU1_IMAGE:-"${stage_dir}/Image"}}
+domu1_ramdisk=${DOMU1_RAMDISK:-"${stage_dir}/initramfs.cpio.gz"}
+domu2_kernel=${DOMU2_KERNEL:-${DOMU2_IMAGE:-}}
+domu2_ramdisk=${DOMU2_RAMDISK:-}
 
 usb_dev=${USB_DEV:-0}
 script_addr=${SCRIPT_ADDR:-0x88100000}
 xen_load_addr=${RISCV_XEN_LOAD_ADDR:-${XEN_LOAD_ADDR:-0x95200000}}
 dtb_load_addr=${DTB_LOAD_ADDR:-0x94200000}
-domu1_load_addr=${DOMU1_LOAD_ADDR:-0x81200000}
-domu2_load_addr=${DOMU2_LOAD_ADDR:-0x8a200000}
+domu1_kernel_load_addr=${DOMU1_KERNEL_LOAD_ADDR:-0x81200000}
+domu1_ramdisk_load_addr=${DOMU1_RAMDISK_LOAD_ADDR:-0x85200000}
+domu2_kernel_load_addr=${DOMU2_KERNEL_LOAD_ADDR:-0x8a200000}
+domu2_ramdisk_load_addr=${DOMU2_RAMDISK_LOAD_ADDR:-0x8e200000}
 fdt_resize=${FDT_RESIZE:-2048}
 
 xen_bootargs=${XEN_BOOTARGS:-"bootscrub=0 com1=poll sched=null"}
 domu_cpus=${DOMU_CPUS:-0x1}
-domu_memory=${DOMU_MEMORY:-"0x0 0x20000"}
-domu1_bootargs=${DOMU1_BOOTARGS:-"config=4,1779709334,megrez-riscv,xen,vz,10000000,0,on,off,4,16,0,irqlat.timer.na..freq.5000000..off,500,0x0000,stream.rw.buf.8388608.contiguous.4..off,0,0x0000,1,0x0000"}
-domu2_bootargs=${DOMU2_BOOTARGS:-"config=4,1779709334,megrez-riscv,xen,vz,10000000,1,on,off,4,16,0,irqlat.timer.na..freq.5000000..off,500,0x0000,stream.rw.buf.8388608.contiguous.4..off,0,0x0000,1,0x0000"}
+domu_memory=${DOMU_MEMORY:-"0x0 0x80000"}
+domu1_bootargs=${DOMU1_BOOTARGS:-"console=hvc0 rdinit=/init rw panic=-1 sysrq_always_enabled=1"}
+domu2_bootargs=${DOMU2_BOOTARGS:-"console=hvc0 rdinit=/init rw panic=-1 sysrq_always_enabled=1"}
 
 usage() {
     cat <<EOF
@@ -40,22 +44,25 @@ Generate a board-first Xen dom0-less U-Boot smoke payload in:
   ${output_dir}
 
 Default inputs:
-  XEN_RAW      ${xen_raw}
-  BOARD_DTB    ${board_dtb}
-  DOMU1_IMAGE  ${domu1_image}
+  XEN_RAW       ${xen_raw}
+  BOARD_DTB     ${board_dtb}
+  DOMU1_KERNEL  ${domu1_kernel}
+  DOMU1_IMAGE   legacy alias for DOMU1_KERNEL
+  DOMU1_RAMDISK ${domu1_ramdisk}
 
 Optional second guest:
-  DOMU2_IMAGE=/path/to/payload.bin $(basename "$0")
+  DOMU2_KERNEL=/path/to/Image DOMU2_RAMDISK=/path/to/initramfs.cpio.gz $(basename "$0")
 
 Environment overrides:
-  STAGE_DIR OUTPUT_DIR XEN_RAW BOARD_DTB DOMU1_IMAGE DOMU2_IMAGE
-  RISCV_XEN_LOAD_ADDR/XEN_LOAD_ADDR DTB_LOAD_ADDR DOMU1_LOAD_ADDR DOMU2_LOAD_ADDR
+  STAGE_DIR OUTPUT_DIR XEN_RAW BOARD_DTB DOMU1_KERNEL DOMU1_IMAGE DOMU1_RAMDISK DOMU2_KERNEL DOMU2_IMAGE DOMU2_RAMDISK
+  RISCV_XEN_LOAD_ADDR/XEN_LOAD_ADDR DTB_LOAD_ADDR DOMU1_KERNEL_LOAD_ADDR DOMU1_RAMDISK_LOAD_ADDR DOMU2_KERNEL_LOAD_ADDR DOMU2_RAMDISK_LOAD_ADDR
   USB_DEV SCRIPT_ADDR FDT_RESIZE XEN_BOOTARGS DOMU1_BOOTARGS DOMU2_BOOTARGS
   DOMU_CPUS DOMU_MEMORY
 
 The generated boot flow follows the board-proven U-Boot sequence:
   load usb 0 <dtb> board.dtb; load usb 0 <xen> xen.uImage;
-  create /chosen xen,domain nodes with vsbi_uart; bootm <xen> - <dtb>.
+  create /chosen xen,domain nodes with multiboot kernel+ramdisk modules; bootm <xen> - <dtb>.
+
 EOF
 }
 
@@ -119,12 +126,15 @@ assert_uboot_string() {
 
 write_domain_node() {
     local domain=${1:?domain required}
-    local load_addr=${2:?load address required}
-    local image=${3:?image path required}
-    local bootargs=${4-}
-    local size_hex
+    local kernel_load_addr=${2:?kernel load address required}
+    local kernel_image=${3:?kernel image path required}
+    local ramdisk_load_addr=${4:?ramdisk load address required}
+    local ramdisk_image=${5:?ramdisk image path required}
+    local bootargs=${6-}
+    local kernel_size ramdisk_size
 
-    size_hex=$(hex_size "${image}")
+    kernel_size=$(hex_size "${kernel_image}")
+    ramdisk_size=$(hex_size "${ramdisk_image}")
     assert_uboot_string "${domain} bootargs" "${bootargs}"
 
     cat <<EOF
@@ -137,34 +147,41 @@ fdt set /chosen/${domain} \#address-cells <0x1>
 fdt set /chosen/${domain} \#size-cells <0x1>
 fdt set /chosen/${domain} memory <${domu_memory}>
 fdt set /chosen/${domain} vsbi_uart
-fdt mknode /chosen/${domain} module@${load_addr}
-fdt set /chosen/${domain}/module@${load_addr} compatible "multiboot,kernel" "multiboot,module"
-fdt set /chosen/${domain}/module@${load_addr} reg <${load_addr} ${size_hex}>
-fdt set /chosen/${domain}/module@${load_addr} bootargs "${bootargs}"
+fdt mknode /chosen/${domain} module@${kernel_load_addr}
+fdt set /chosen/${domain}/module@${kernel_load_addr} compatible "multiboot,kernel" "multiboot,module"
+fdt set /chosen/${domain}/module@${kernel_load_addr} reg <${kernel_load_addr} ${kernel_size}>
+fdt set /chosen/${domain}/module@${kernel_load_addr} bootargs "${bootargs}"
+fdt mknode /chosen/${domain} module@${ramdisk_load_addr}
+fdt set /chosen/${domain}/module@${ramdisk_load_addr} compatible "multiboot,ramdisk" "multiboot,module"
+fdt set /chosen/${domain}/module@${ramdisk_load_addr} reg <${ramdisk_load_addr} ${ramdisk_size}>
 EOF
 }
 
 write_boot_cmd() {
     local boot_cmd=${1:?boot.cmd output required}
-    local domu1_size domu2_size
+    local domu1_kernel_size domu1_ramdisk_size domu2_kernel_size domu2_ramdisk_size
 
-    domu1_size=$(hex_size "${output_dir}/domu1.bin")
+    domu1_kernel_size=$(hex_size "${output_dir}/domu1.img")
+    domu1_ramdisk_size=$(hex_size "${output_dir}/domu1.rd")
     assert_uboot_string XEN_BOOTARGS "${xen_bootargs}"
 
     {
         cat <<EOF
-# Megrez Xen dom0-less smoke script.
+# Megrez Xen dom0-less Linux smoke script.
 # Generated by scripts/board-xen-smoke.sh.
 # Copy this directory to the root of the USB mass-storage device seen by U-Boot.
 
 load usb ${usb_dev} ${dtb_load_addr} board.dtb
 load usb ${usb_dev} ${xen_load_addr} xen.uImage
-load usb ${usb_dev} ${domu1_load_addr} domu1.bin
+load usb ${usb_dev} ${domu1_kernel_load_addr} domu1.img
+load usb ${usb_dev} ${domu1_ramdisk_load_addr} domu1.rd
 EOF
-        if [ -n "${domu2_image}" ]; then
-            domu2_size=$(hex_size "${output_dir}/domu2.bin")
+        if [ -n "${domu2_kernel}" ] && [ -n "${domu2_ramdisk}" ]; then
+            domu2_kernel_size=$(hex_size "${output_dir}/domu2.img")
+            domu2_ramdisk_size=$(hex_size "${output_dir}/domu2.rd")
             cat <<EOF
-load usb ${usb_dev} ${domu2_load_addr} domu2.bin
+load usb ${usb_dev} ${domu2_kernel_load_addr} domu2.img
+load usb ${usb_dev} ${domu2_ramdisk_load_addr} domu2.rd
 EOF
         fi
         cat <<EOF
@@ -173,9 +190,9 @@ fdt resize ${fdt_resize}
 
 fdt set /chosen xen,xen-bootargs "${xen_bootargs}"
 EOF
-        write_domain_node domU1 "${domu1_load_addr}" "${output_dir}/domu1.bin" "${domu1_bootargs}"
-        if [ -n "${domu2_image}" ]; then
-            write_domain_node domU2 "${domu2_load_addr}" "${output_dir}/domu2.bin" "${domu2_bootargs}"
+        write_domain_node domU1 "${domu1_kernel_load_addr}" "${output_dir}/domu1.img" "${domu1_ramdisk_load_addr}" "${output_dir}/domu1.rd" "${domu1_bootargs}"
+        if [ -n "${domu2_kernel}" ] && [ -n "${domu2_ramdisk}" ]; then
+            write_domain_node domU2 "${domu2_kernel_load_addr}" "${output_dir}/domu2.img" "${domu2_ramdisk_load_addr}" "${output_dir}/domu2.rd" "${domu2_bootargs}"
         fi
         cat <<EOF
 
@@ -186,9 +203,9 @@ bootm ${xen_load_addr} - ${dtb_load_addr}
 EOF
     } > "${boot_cmd}"
 
-    log "domU1 payload size ${domu1_size}"
-    if [ -n "${domu2_image}" ]; then
-        log "domU2 payload size ${domu2_size}"
+    log "domU1 kernel size ${domu1_kernel_size}, ramdisk size ${domu1_ramdisk_size}"
+    if [ -n "${domu2_kernel}" ] && [ -n "${domu2_ramdisk}" ]; then
+        log "domU2 kernel size ${domu2_kernel_size}, ramdisk size ${domu2_ramdisk_size}"
     fi
 }
 
@@ -207,8 +224,10 @@ Files
               mkimage -A RISCV -T kernel -a ${xen_load_addr} -e ${xen_load_addr} -C none -d <xen> xen.uImage
 - xen.uimg    8.3-safe duplicate of xen.uImage for FAT/NLS fallback experiments.
 - board.dtb   Base board DTB loaded at ${dtb_load_addr}.
-- domu1.bin   Required domU payload loaded at ${domu1_load_addr}.
-- domu2.bin   Optional second domU payload loaded at ${domu2_load_addr}.
+- domu1.img   Required domU1 Linux kernel Image loaded at ${domu1_kernel_load_addr}.
+- domu1.rd    Required domU1 initramfs loaded at ${domu1_ramdisk_load_addr}.
+- domu2.img   Optional second domU2 Linux kernel Image loaded at ${domu2_kernel_load_addr}.
+- domu2.rd    Optional second domU2 initramfs loaded at ${domu2_ramdisk_load_addr}.
 - boot.cmd    Plain U-Boot commands.
 - boot.scr    U-Boot script image.
 
@@ -226,8 +245,7 @@ source ${script_addr}
 Success criteria
 ----------------
 The serial console should show Xen parsing the mutated /chosen node and booting
-one or more dom0-less domains. For the known-good irqlat payload, the payload
-bootargs are embedded in boot.cmd.
+one or more dom0-less Linux domains with kernel + initramfs modules.
 
 Notes
 -----
@@ -244,9 +262,14 @@ main() {
     require_command stat
     require_file "${xen_raw}"
     require_file "${board_dtb}"
-    require_file "${domu1_image}"
-    if [ -n "${domu2_image}" ]; then
-        require_file "${domu2_image}"
+    require_file "${domu1_kernel}"
+    require_file "${domu1_ramdisk}"
+    if [ -n "${domu2_kernel}" ] || [ -n "${domu2_ramdisk}" ]; then
+        if [ -z "${domu2_kernel}" ] || [ -z "${domu2_ramdisk}" ]; then
+            fail "DOMU2_KERNEL/DOMU2_IMAGE and DOMU2_RAMDISK must be set together"
+        fi
+        require_file "${domu2_kernel}"
+        require_file "${domu2_ramdisk}"
     fi
 
     log "preparing ${output_dir}"
@@ -254,9 +277,11 @@ main() {
     mkdir -p -- "${output_dir}"
 
     install -m 0644 "${board_dtb}" "${output_dir}/board.dtb"
-    install -m 0644 "${domu1_image}" "${output_dir}/domu1.bin"
-    if [ -n "${domu2_image}" ]; then
-        install -m 0644 "${domu2_image}" "${output_dir}/domu2.bin"
+    install -m 0644 "${domu1_kernel}" "${output_dir}/domu1.img"
+    install -m 0644 "${domu1_ramdisk}" "${output_dir}/domu1.rd"
+    if [ -n "${domu2_kernel}" ] && [ -n "${domu2_ramdisk}" ]; then
+        install -m 0644 "${domu2_kernel}" "${output_dir}/domu2.img"
+        install -m 0644 "${domu2_ramdisk}" "${output_dir}/domu2.rd"
     fi
 
     log "wrapping Xen as xen.uImage"

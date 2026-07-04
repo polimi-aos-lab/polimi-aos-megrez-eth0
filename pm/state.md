@@ -25,14 +25,15 @@ Written: 2026-07-04 · assistant
 Done: pivoted `60f.4` from QEMU to board-first Xen smoke; added
 `scripts/board-xen-smoke.sh` + `make board-xen-smoke`, using the board-proven
 U-Boot flow (`mkimage -A RISCV ... xen.uImage`, DTB at `0x94200000`, Xen at
-`0x95200000`, domU payloads at `0x81200000`/`0x8a200000`, `vsbi_uart`).
-Recorded bd memories for the U-Boot script and mkimage CLI; updated PM readme
-and ADR. State: script `--help`, `make -n board-xen-smoke`, and fake one/two
-domU payload generation passed. Board Linux/SD preflight passed after user reset.
-Next: 1) provide/build real `stage/src/xen/xen/xen`, `stage/irqlat.bin`, and
-board DTB 2) run `make board-xen-smoke` (optionally `DOMU2_IMAGE=...`) 3) copy
-`stage/board-xen-smoke/` to USB and execute `usb start; load usb 0 0x88100000
-boot.scr; source 0x88100000`. Gotchas: `xen.uImage` uses user-proven uppercase
-`RISCV` mkimage form; FAT/NLS on board exposes 8.3 aliases, so USB/ext4 or short
-fallback `xen.uimg` avoids alias traps. Blockers: real Xen/domU payloads not
-present in this checkout.
+`0x95200000`, Linux domU kernel+initramfs modules, `vsbi_uart`). Recorded bd
+memories for the U-Boot script and mkimage CLI; updated PM readme and ADR.
+State: script `--help`, `bash -n`, `make -n board-xen-smoke`, fake two-domU
+generation, and real staged Linux `Image`+initramfs generation with fake Xen
+passed. Board Linux/SD preflight passed after user reset. Next: 1) build/provide
+`stage/src/xen/xen/xen` and the board DTB 2) use
+existing `make build-artifacts` outputs (`stage/Image`, `stage/initramfs.cpio.gz`)
+3) run `make board-xen-smoke`, copy `stage/board-xen-smoke/` to USB, then
+`usb start; load usb 0 0x88100000 boot.scr; source 0x88100000`. Gotchas:
+`xen.uImage` uses user-proven uppercase `RISCV` mkimage form; FAT/NLS exposes
+8.3 aliases, so USB/ext4 or fallback `xen.uimg` avoids alias traps. Blockers:
+real Xen raw binary and user-proven board DTB are not present in this checkout.
