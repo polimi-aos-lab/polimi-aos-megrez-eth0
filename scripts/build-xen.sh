@@ -25,7 +25,7 @@ xen_dir=${XEN_DIR:-"${src_dir}/xen"}
 xen_build_dir=${xen_dir}/xen
 xen_bin=${xen_build_dir}/xen
 staged_xen=${stage_dir}/xen
-xen_target_arch=${XEN_TARGET_ARCH:-${ARCH:-riscv64}}
+xen_target_arch=${XEN_TARGET_ARCH:-riscv64}
 cross_compile=${CROSS_COMPILE:-riscv64-linux-gnu-}
 kbuild_defconfig=tiny64_defconfig
 
@@ -45,7 +45,7 @@ Expected source layout:
 
 Environment overrides:
   STAGE_DIR SRC_DIR XEN_DIR
-  ARCH XEN_TARGET_ARCH CROSS_COMPILE JOBS
+  XEN_TARGET_ARCH CROSS_COMPILE JOBS
   DOCKER DOCKER_IMAGE BUILD_XEN_IN_CONTAINER
 
 The Xen build uses:
@@ -72,7 +72,7 @@ if [ "${BUILD_XEN_IN_CONTAINER:-0}" != 1 ]; then
     docker_image=${DOCKER_IMAGE:-polimi-aos-megrez-build-env:linux-amd64}
     docker_env=(-e BUILD_XEN_IN_CONTAINER=1)
 
-    for name in STAGE_DIR SRC_DIR XEN_DIR ARCH XEN_TARGET_ARCH CROSS_COMPILE JOBS; do
+    for name in STAGE_DIR SRC_DIR XEN_DIR XEN_TARGET_ARCH CROSS_COMPILE JOBS; do
         if [ "${!name+x}" = x ]; then
             docker_env+=(-e "${name}=${!name}")
         fi
