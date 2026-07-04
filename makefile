@@ -4,7 +4,7 @@ DEFAULT_PLATFORM := $(if $(filter Darwin,$(HOST_OS)),linux/aarch64,linux/amd64)
 PLATFORM ?= $(DEFAULT_PLATFORM)
 TAG ?= polimi-aos-megrez-build-env:$(subst /,-,$(PLATFORM))
 
-.PHONY: build-container enter-container toolchain-check fetch-sources build-artifacts assemble-boot board-xen-smoke mcp-install mcp-typecheck mcp-build mcp-test
+.PHONY: build-container enter-container toolchain-check fetch-sources build-artifacts build-xen assemble-boot board-xen-smoke mcp-install mcp-typecheck mcp-build mcp-test
 
 build-container:
 	$(DOCKER) build --platform $(PLATFORM) -t $(TAG) .
@@ -24,6 +24,9 @@ fetch-sources:
 
 build-artifacts: 
 	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(TAG)" ./scripts/build-artifacts.sh
+
+build-xen:
+	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(TAG)" ./scripts/build-xen.sh
 
 assemble-boot: 
 	./scripts/assemble-boot.sh

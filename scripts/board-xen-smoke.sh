@@ -7,7 +7,13 @@ repo_root=$(cd -- "${script_dir}/.." && pwd)
 stage_dir=${STAGE_DIR:-"${repo_root}/stage"}
 output_dir=${OUTPUT_DIR:-"${stage_dir}/board-xen-smoke"}
 
-xen_raw=${XEN_RAW:-"${stage_dir}/src/xen/xen/xen"}
+if [ -n "${XEN_RAW:-}" ]; then
+    xen_raw=${XEN_RAW}
+elif [ -f "${stage_dir}/xen" ]; then
+    xen_raw="${stage_dir}/xen"
+else
+    xen_raw="${stage_dir}/src/xen/xen/xen"
+fi
 if [ -n "${BOARD_DTB:-}" ]; then
     board_dtb=${BOARD_DTB}
 elif [ -f "${stage_dir}/hifive-premier-550-plain.dtb" ]; then

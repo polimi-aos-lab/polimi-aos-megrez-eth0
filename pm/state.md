@@ -23,17 +23,17 @@ multi-arch via registry (se il flusso diventa ripetitivo).
 Written: 2026-07-04 · assistant
 
 Done: pivoted `60f.4` from QEMU to board-first Xen smoke; added
-`scripts/board-xen-smoke.sh` + `make board-xen-smoke`, using the board-proven
-U-Boot flow (`mkimage -A RISCV ... xen.uImage`, DTB at `0x94200000`, Xen at
+`scripts/build-xen.sh` + `make build-xen` for raw Xen and
+`scripts/board-xen-smoke.sh` + `make board-xen-smoke` for the board-proven U-Boot
+flow (`mkimage -A RISCV ... xen.uImage`, DTB at `0x94200000`, Xen at
 `0x95200000`, Linux domU kernel+initramfs modules, `vsbi_uart`). Recorded bd
 memories for the U-Boot script and mkimage CLI; updated PM readme and ADR.
-State: script `--help`, `bash -n`, `make -n board-xen-smoke`, fake two-domU
-generation, and real staged Linux `Image`+initramfs generation with fake Xen
-passed. Board Linux/SD preflight passed after user reset. Next: 1) build/provide
-`stage/src/xen/xen/xen` and the board DTB 2) use
-existing `make build-artifacts` outputs (`stage/Image`, `stage/initramfs.cpio.gz`)
-3) run `make board-xen-smoke`, copy `stage/board-xen-smoke/` to USB, then
-`usb start; load usb 0 0x88100000 boot.scr; source 0x88100000`. Gotchas:
-`xen.uImage` uses user-proven uppercase `RISCV` mkimage form; FAT/NLS exposes
-8.3 aliases, so USB/ext4 or fallback `xen.uimg` avoids alias traps. Blockers:
-real Xen raw binary and user-proven board DTB are not present in this checkout.
+State: `bash -n`, script `--help`, `make -n build-xen`, `make -n board-xen-smoke`,
+fake two-domU generation, and real staged Linux `Image`+initramfs generation with
+fake Xen passed. Board Linux/SD preflight passed after user reset. Next:
+1) `make build-container fetch-sources build-artifacts build-xen` 2) provide the
+user-proven board DTB if different from `stage/eic7700-milkv-megrez.dtb`
+3) `make board-xen-smoke`, copy `stage/board-xen-smoke/` to USB, then `usb start;
+load usb 0 0x88100000 boot.scr; source 0x88100000`. Gotchas: uppercase `RISCV`
+mkimage form; FAT/NLS exposes 8.3 aliases, so USB/ext4 or `xen.uimg` avoids traps.
+Blockers: user-proven board DTB is not present in this checkout.

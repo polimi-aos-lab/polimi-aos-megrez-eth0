@@ -29,6 +29,7 @@ Sources pinned in `sources.lock`: BSP kernel `milkv-megrez/rockos-kernel`; Xen
 - `make build-container` — Docker build image (`TAG`/`PLATFORM` overrideable).
 - `make fetch-sources` — materialize pinned sources under `stage/src/`.
 - `make build-artifacts` — build Linux `Image(.gz)`, modules, initramfs, DTB.
+- `make build-xen` — build raw Xen and copy it to `stage/xen`.
 - `make assemble-boot` — create SD/U-Boot Linux payload in `stage/boot/`.
 - `make board-xen-smoke` — create U-Boot USB Xen dom0-less smoke payload in
   `stage/board-xen-smoke/`.
