@@ -30,7 +30,9 @@ Environment:
   MMC_PART     default 1
   LOAD_ADDR    default 0x90000000
   PROMPT_RE    default =>\\s*$
-
+  LINE_ENDING  default cr      (cr | lf | crlf)
+  CHAR_DELAY_MS default 5      (paced U-Boot command text)
+  POST_YMODEM_DELAY_MS default 1000
 Close screen/picocom first. This script owns the UART until it exits.`);
 }
 
@@ -52,6 +54,9 @@ const mmcDev = process.env.MMC_DEV ?? '1';
 const mmcPart = process.env.MMC_PART ?? '1';
 const loadAddr = process.env.LOAD_ADDR ?? '0x90000000';
 const promptRe = new RegExp(process.env.PROMPT_RE ?? '=>\\s*$');
+const charDelayMs = Number.parseInt(process.env.CHAR_DELAY_MS ?? '5', 10);
+const postYmodemDelayMs = Number.parseInt(process.env.POST_YMODEM_DELAY_MS ?? '1000', 10);
+const lineEnding = lineEndingFromEnv(process.env.LINE_ENDING ?? 'cr');
 const data = await readFile(sourcePath);
 
 const port = new SerialPort({
@@ -72,6 +77,23 @@ port.on('data', (chunk) => {
 
 function log(message) {
   process.stderr.write(`==> ${message}\n`);
+}
+
+function lineEndingFromEnv(value) {
+  switch (value) {
+    case 'cr':
+      return '\r';
+    case 'lf':
+      return '\n';
+    case 'crlf':
+      return '\r\n';
+    default:
+      throw new Error(`LINE_ENDING must be cr, lf, or crlf, got: ${value}`);
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function transcriptFrom(cursor) {
@@ -98,7 +120,12 @@ async function writeBytes(bytes) {
 }
 
 async function writeText(text) {
-  await writeBytes(Buffer.from(text, 'utf8'));
+  for (const char of text) {
+    await writeBytes(Buffer.from(char, 'utf8'));
+    if (charDelayMs > 0) {
+      await sleep(charDelayMs);
+    }
+  }
 }
 
 async function waitUntil(predicate, timeoutMs, label) {
@@ -128,7 +155,7 @@ async function waitForAnyByte(values, startIndex, label, timeoutMs = 30_000) {
 
 async function command(text, label = text, timeoutMs = 15_000) {
   const cursor = rxText.length;
-  await writeText(`${text}\n`);
+  await writeText(`${text}${lineEnding}`);
   await waitForPrompt(cursor, label, timeoutMs);
   return transcriptFrom(cursor);
 }
@@ -139,7 +166,7 @@ try {
 
   log('synchronizing with U-Boot prompt');
   let cursor = rxText.length;
-  await writeText('\n');
+  await writeText(lineEnding);
   await waitForPrompt(cursor, 'U-Boot prompt', 10_000);
 
   log(`selecting mmc ${mmcDev}`);
@@ -148,7 +175,7 @@ try {
   log(`requesting YMODEM load to ${loadAddr}`);
   const loadyCursor = rxText.length;
   const startBytes = rxBytes.length;
-  await writeText(`loady ${loadAddr}\n`);
+  await writeText(`loady ${loadAddr}${lineEnding}`);
   await waitForByte(YMODEM_C, startBytes, 'YMODEM receiver C', 30_000);
 
   log(`sending ${destName} (${data.byteLength} bytes) via YMODEM`);
@@ -179,6 +206,7 @@ try {
   await writeBytes(frames.end);
   await waitForByte(YMODEM_ACK, replyStart, 'YMODEM end ACK', 10_000);
   await waitForPrompt(loadyCursor, 'U-Boot prompt after loady', 30_000);
+  await sleep(postYmodemDelayMs);
 
   log(`writing ${destName} to mmc ${mmcDev}:${mmcPart}`);
   process.stdout.write(await command(
