@@ -2,57 +2,44 @@
 
 ## Purpose
 
-Ambiente di build e loop di sviluppo per **Xen + Linux su RISC-V**, mirato al
-**Milk-V Megrez (SoC ESWIN EIC7700X)**. La board ha già u-boot: non lo
-ricompiliamo, lo usiamo solo per `bootcmd`/boot script. Due obiettivi: (1) far
-funzionare il **driver ethernet** della NIC (nel BSP: `DWMAC_WIN2030` /
-`dwmac-win2030.c`) su Linux bare e poi **in passthrough sotto Xen dom0-less**;
-(2) un **server MCP** con cui un agente deploya, esegue, osserva e cicla — su
-**QEMU** e sulla **board reale** via UART.
-Host builder = questo server x86; target d'uso = laptop macOS Apple Silicon M2.
+Build/test loop for **Xen + Linux on RISC-V** targeting **Milk-V Megrez
+(ESWIN EIC7700X)**. The board already has U-Boot; this repo only prepares
+payloads/boot scripts. Goals: bring up BSP Ethernet (`DWMAC_WIN2030`) on Linux
+bare, then pass the NIC to a Xen dom0-less domU, with a native host MCP loop over
+the real board UART. QEMU is optional diagnostic support only.
 
 ## Architecture
 
-Decisioni e trade-off: `pm/adr/0001-architettura-build-env-e-mcp.md`. Boundary:
+Decisions: `pm/adr/0001-architettura-build-env-e-mcp.md`.
 
-- **build-env** (container multi-arch, toolchain **prebuilt**): produce artefatti
-  RISC-V (Image, moduli `.ko`, Xen, DTB dom0-less, initramfs). Artefatti
-  arch-independent → x86→Mac per copia; build-env host-specifico → si ricostruisce
-  (non `docker save`).
-- **MCP** (TypeScript/Node, **nativo sull'host**): interfaccia unica
-  `deploy/boot/run/observe/reset`, backend reale `board` (ymodem su UART,
-  bootcmd u-boot esistente), mock seriale pty per dev offline. QEMU resta solo
-  smoke-test non-MCP del boot Xen (`-M virt`, virtio-net).
+- **build-env**: multi-arch container with prebuilt `riscv64-linux-gnu`
+  toolchain; emits portable RISC-V artifacts (`Image`, modules, Xen, DTB,
+  initramfs). Rebuild per host; do not `docker save` x86 images for Mac.
+- **MCP**: TypeScript/Node running natively on the host; typed
+  `deploy/boot/run/observe/reset`, real `board` backend over UART/ymodem, mock
+  backend for offline serial scenarios.
+- **Xen smoke**: board-first U-Boot/USB payload (`board-xen-smoke`); QEMU `virt`
+  does not emulate the real NIC and is not the hardware gate.
 
-Sorgenti pinnate (ref in `sources.lock`, materializzate da `scripts/fetch-sources.sh`):
-BSP kernel `github.com/milkv-megrez/rockos-kernel`; Xen `gitlab.com/vittorio.zaccaria/xen`
-branch `latest` (mirror `olkur/xen`, dom0-less); toolchain prebuilt Bootlin / `gcc-riscv64-linux-gnu`.
+Sources pinned in `sources.lock`: BSP kernel `milkv-megrez/rockos-kernel`; Xen
+`gitlab.com/vittorio.zaccaria/xen` branch `latest`; BusyBox/lrzsz tarballs.
 
 ## Build & test
 
-1. `make build-container` — builds the Docker build image (`TAG`/`PLATFORM`
-   overrideable).
-2. `make fetch-sources` — materializes pinned git/tar sources under
-   `stage/src/` through Docker.
-3. `make build-artifacts` — through Docker, emits `stage/Image(.gz)`,
-   `stage/modules/`, `stage/dwmac-win2030.ko`, `stage/initramfs.cpio.gz`, and
-   `stage/eic7700-milkv-megrez.dtb`.
-4. `make assemble-boot` — creates `stage/boot/` with `boot.scr`, boot payload,
-   NIC-capable initramfs, and SD/U-Boot instructions.
+- `make build-container` — Docker build image (`TAG`/`PLATFORM` overrideable).
+- `make fetch-sources` — materialize pinned sources under `stage/src/`.
+- `make build-artifacts` — build Linux `Image(.gz)`, modules, initramfs, DTB.
+- `make assemble-boot` — create SD/U-Boot Linux payload in `stage/boot/`.
+- `make board-xen-smoke` — create U-Boot USB Xen dom0-less smoke payload in
+  `stage/board-xen-smoke/`.
 
 ## Conventions
 
-- Kernel config = BSP vendor `win2030_defconfig` + delta
-  `config/kernel/eic7700-eth.fragment`. Il defconfig è la baseline Milk-V/ESWIN;
-  il frammento tiene il delta locale: `STMMAC_ETH=m`,
-  `STMMAC_PLATFORM=m`, `DWMAC_WIN2030=m`, `MAGIC_SYSRQ=y`, baseline wired
-  headless senza DRM/media/audio/wireless/firewall/overlay net/regolatore
-  MPQ8785/acceleratori crypto+AI ESWIN, e `BCMDHD=n` (AP12275 Wi-Fi
-  incompleto nel checkout). La NIC Megrez usa `DWMAC_WIN2030`
-  (`dwmac-win2030.c`, compatible `eswin,win2030-qos-eth`), non l'upstream
-  recente `DWMAC_EIC7700`.
-- QEMU **non emula** la NIC eic7700 (solo virtio-net): driver reale testabile
-  **solo su HW**; QEMU per catena di boot, meccanica Xen/DT, MCP a secco.
-- Reset board: **SBI SRST + magic SysRq over serial** (`panic=-1`); non recupera
-  wedge totali con IRQ off.
-- Su macOS il container non vede la seriale USB → l'MCP gira nativo sull'host.
+- Kernel baseline = BSP `win2030_defconfig` + `config/kernel/eic7700-eth.fragment`
+  (`STMMAC_ETH=m`, `STMMAC_PLATFORM=m`, `DWMAC_WIN2030=m`, `MAGIC_SYSRQ=y`,
+  headless wired baseline; no DRM/media/audio/wireless/firewall/noisy extras).
+- Megrez NIC uses BSP `DWMAC_WIN2030` (`dwmac-win2030.c`, compatible
+  `eswin,win2030-qos-eth`), not newer upstream `DWMAC_EIC7700`.
+- Board reset = SBI SRST + magic SysRq over serial (`panic=-1`); cannot recover
+  wedges with IRQs off.
+- macOS containers do not see the USB serial; MCP must run natively on host.

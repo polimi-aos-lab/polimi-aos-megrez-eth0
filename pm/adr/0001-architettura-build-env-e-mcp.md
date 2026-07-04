@@ -4,9 +4,11 @@
 - **Date:** 2026-07-01
 - **Deciders:** vzaccaria
 - **Context tracker:** epics `polimi-aos-megrez-eth0-dvq`, `-60f`, `-sju`
-- **Amended:** 2026-07-02 — u-boot non si builda: Megrez lo ha già on-board, il
-  piano usa solo `bootcmd`/boot script; Xen pinned da branch `latest`.
-  Amend precedente: QEMU declassato da backend MCP a smoke-test del boot Xen.
+- **Amended:** 2026-07-04 — il target `qemu-xen-smoke` è sostituito da uno
+  smoke Xen **board-first** via U-Boot/USB (`board-xen-smoke`), perché esiste già
+  una sequenza U-Boot funzionante per Xen dom0-less sulla board. Amend 2026-07-02:
+  u-boot non si builda: Megrez lo ha già on-board, il piano usa solo `bootcmd` /
+  boot script; Xen pinned da branch `latest`.
 
 ## Contesto
 
@@ -91,9 +93,10 @@ hardware:
 3. **Xen sul Megrez**: domU dom0-less, NIC eic7700 in passthrough via DT;
    l'agente cicla su hardware. (Fase 3)
 
-QEMU `virt` resta solo come **smoke-test non-MCP** del boot Xen (il binario Xen +
-DT dom0-less + kernel domU bootano?), indipendente dalla NIC — utile per il
-bring-up di Xen prima di andare su HW. Target `make qemu-xen-smoke`, non una fase.
+Lo smoke Xen non-MCP diventa **board-first**: si prepara un payload U-Boot/USB
+con binario Xen wrappato da `mkimage`, DTB base e moduli domU descritti sotto
+`/chosen`. QEMU `virt` resta opzionale per diagnosi della sola catena di boot,
+ma non è più il gate prima dell'hardware.
 
 ### D6 — Reset: SBI SRST + SysRq-over-serial come primario
 
@@ -132,7 +135,8 @@ hardware sul pin reset = miglioramento futuro, parcheggiato.
   rapida e fedele alla board.
 - **QEMU come backend MCP / test del driver in emulazione**: scartato — `virt`
   espone virtio-net, non l'eic7700 (device platform-MMIO); non esercita né
-  driver né passthrough. QEMU resta solo smoke-test del boot Xen (non-MCP).
+  driver né passthrough. Anche lo smoke Xen iniziale è ora board-first; QEMU resta
+  solo strumento opzionale di diagnosi della catena di boot.
 - **Delta dell'immagine di sistema intera via UART**: scartato per il loop del
   driver — MB su UART a 115200 (~11 KB/s) = minuti/giro; si spingono solo i file
   cambiati (`.ko`/config) su una Linux già bootata da SD.
