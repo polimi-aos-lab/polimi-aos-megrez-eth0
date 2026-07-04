@@ -20,7 +20,7 @@ Deploy one small file to the Megrez SD boot partition from a U-Boot prompt:
   1. send: mmc dev <MMC_DEV>
   2. send: loady <LOAD_ADDR>
   3. transfer the file via YMODEM
-  4. send: fatwrite mmc <MMC_DEV>:<MMC_PART> <LOAD_ADDR> <dest-name> <size>
+  4. send: fatwrite mmc <MMC_DEV>:<MMC_PART> <LOAD_ADDR> <dest-name> <hex-size>
   5. send: fatls mmc <MMC_DEV>:<MMC_PART> <dest-name>
 
 Environment:
@@ -58,6 +58,7 @@ const charDelayMs = Number.parseInt(process.env.CHAR_DELAY_MS ?? '5', 10);
 const postYmodemDelayMs = Number.parseInt(process.env.POST_YMODEM_DELAY_MS ?? '1000', 10);
 const lineEnding = lineEndingFromEnv(process.env.LINE_ENDING ?? 'cr');
 const data = await readFile(sourcePath);
+const fatwriteSize = `0x${data.byteLength.toString(16)}`;
 
 const port = new SerialPort({
   path: serialPath,
@@ -208,9 +209,9 @@ try {
   await waitForPrompt(loadyCursor, 'U-Boot prompt after loady', 30_000);
   await sleep(postYmodemDelayMs);
 
-  log(`writing ${destName} to mmc ${mmcDev}:${mmcPart}`);
+  log(`writing ${destName} to mmc ${mmcDev}:${mmcPart} (${fatwriteSize})`);
   process.stdout.write(await command(
-    `fatwrite mmc ${mmcDev}:${mmcPart} ${loadAddr} ${destName} ${data.byteLength}`,
+    `fatwrite mmc ${mmcDev}:${mmcPart} ${loadAddr} ${destName} ${fatwriteSize}`,
     'fatwrite',
     60_000,
   ));
