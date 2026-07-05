@@ -68,9 +68,11 @@ Environment overrides:
   BOOT_IFACE BOOT_DEV BOOT_PART SCRIPT_ADDR FDT_RESIZE XEN_DEPLOY_NAME XEN_BOOTARGS DOMU1_BOOTARGS DOMU2_BOOTARGS
   DOMU_CPUS DOMU_MEMORY
 
-The generated boot flow follows the board-proven U-Boot sequence:
-  mmc dev <dev>; load mmc <dev>:<part> <addr> <file>;
-  create /chosen xen,domain nodes with multiboot kernel+ramdisk modules; bootm <xen> - <dtb>.
+BOOT_IFACE may be mmc, usb, or tftp. tftp emits tftpboot commands and expects
+U-Boot serverip/ipaddr to be configured before sourcing boot.scr.
+
+The generated boot flow loads payloads, creates /chosen xen,domain nodes with
+multiboot kernel+ramdisk modules, then runs bootm <xen> - <dtb>.
 
 EOF
 }
@@ -141,8 +143,11 @@ storage_preamble() {
         usb)
             printf 'usb start\n'
             ;;
+        tftp)
+            printf 'setenv autostart no\necho Using TFTP server ${serverip} from client ${ipaddr}\n'
+            ;;
         *)
-            fail "BOOT_IFACE must be mmc or usb, got: ${boot_iface}"
+            fail "BOOT_IFACE must be mmc, usb, or tftp, got: ${boot_iface}"
             ;;
     esac
 }
@@ -158,8 +163,11 @@ storage_load() {
         usb)
             printf 'load usb %s %s %s\n' "${boot_dev}" "${addr}" "${file}"
             ;;
+        tftp)
+            printf 'tftpboot %s %s\n' "${addr}" "${file}"
+            ;;
         *)
-            fail "BOOT_IFACE must be mmc or usb, got: ${boot_iface}"
+            fail "BOOT_IFACE must be mmc, usb, or tftp, got: ${boot_iface}"
             ;;
     esac
 }
@@ -292,12 +300,11 @@ Files
 - boot.cmd    Plain U-Boot commands.
 - boot.scr    U-Boot script image.
 
-Copy to SD
-----------
-Copy all files in this directory to the root of the board SD boot partition.
-The generated script defaults to 'mmc dev ${boot_dev}' and
-'load mmc ${boot_dev}:${boot_part} ...'. Override BOOT_IFACE=usb only for boards
-whose U-Boot USB mass storage works.
+Transport
+---------
+BOOT_IFACE=${boot_iface}. For mmc/usb, copy all files in this directory to the
+root of the board SD/USB boot partition. For tftp, serve this directory from
+the host and configure U-Boot serverip/ipaddr before loading boot.scr.
 
 U-Boot one-shot
 ---------------
@@ -360,6 +367,7 @@ main() {
     log "wrapping Xen as ${xen_deploy_name}"
     mkimage -A RISCV -T kernel -a "${xen_load_addr}" -e "${xen_load_addr}" \
         -C none -d "${xen_raw}" "${output_dir}/${xen_deploy_name}" >/dev/null
+
 
     write_boot_cmd "${output_dir}/boot.cmd"
     log "generating boot.scr"
