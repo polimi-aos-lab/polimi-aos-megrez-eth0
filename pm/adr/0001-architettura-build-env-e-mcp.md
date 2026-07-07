@@ -4,11 +4,14 @@
 - **Date:** 2026-07-01
 - **Deciders:** vzaccaria
 - **Context tracker:** epics `polimi-aos-megrez-eth0-dvq`, `-60f`, `-sju`
-- **Amended:** 2026-07-04 — il target `qemu-xen-smoke` è sostituito da uno
-  smoke Xen **board-first** via U-Boot/SD (`board-xen-smoke`), perché la board
-  non ha USB storage utilizzabile in U-Boot. Amend 2026-07-02:
-  u-boot non si builda: Megrez lo ha già on-board, il piano usa solo `bootcmd` /
-  boot script; Xen pinned da branch `latest`.
+- **Amended:** 2026-07-07 — le sezioni su smoke/deploy Xen della Fase 3 sono
+  storiche: il path operativo noto-buono per Megrez/Xen è TFTP diretto host
+  `en0` (`192.168.188.132`) → board (`192.168.188.110`), non SD/YMODEM; il fix
+  console RX domU/vSBI è documentato in ADR 0002. Amended 2026-07-04 — il target
+  `qemu-xen-smoke` è sostituito da uno smoke Xen **board-first** via
+  U-Boot/SD (`board-xen-smoke`), perché la board non ha USB storage utilizzabile
+  in U-Boot. Amend 2026-07-02: u-boot non si builda: Megrez lo ha già on-board,
+  il piano usa solo `bootcmd` / boot script; Xen pinned da branch `latest`.
 
 ## Contesto
 

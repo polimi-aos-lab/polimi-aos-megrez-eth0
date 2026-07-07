@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createRequire } from 'node:module';
 import { writeFile } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
 
 const require = createRequire(new URL('../mcp/package.json', import.meta.url));
 const { SerialPort } = require('serialport');
@@ -163,8 +164,13 @@ const port = new SerialPort({
 });
 
 let rxText = '';
+const logStream = options.logPath === undefined
+  ? undefined
+  : createWriteStream(options.logPath);
 port.on('data', (chunk) => {
-  rxText += chunk.toString('utf8');
+  const text = chunk.toString('utf8');
+  rxText += text;
+  logStream?.write(text.replace(/\r/g, ''));
 });
 
 function transcriptFrom(cursor) {
@@ -186,11 +192,23 @@ async function withTimeout(promise, timeoutMs, label) {
 }
 
 async function openPort() {
-  await withTimeout(
-    new Promise((resolve, reject) => port.open((error) => (error ? reject(error) : resolve()))),
-    3000,
-    'serial open',
-  );
+  const attempts = 15;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await withTimeout(
+        new Promise((resolve, reject) => port.open((error) => (error ? reject(error) : resolve()))),
+        3000,
+        'serial open',
+      );
+      return;
+    } catch (error) {
+      if (attempt === attempts) {
+        throw error;
+      }
+      log(`serial open failed (${error.message}); retry ${attempt}/${attempts}`);
+      await sleep(2000);
+    }
+  }
 }
 
 async function closePort() {
@@ -283,6 +301,9 @@ try {
     await runCommand(command, waitForPromptAfterCommand, waitForExpectAfterCommand);
   }
 } finally {
+  if (logStream !== undefined) {
+    await new Promise((resolve) => logStream.end(resolve));
+  }
   if (options.logPath !== undefined) {
     await writeFile(options.logPath, rxText.replace(/\r/g, ''));
   }

@@ -313,6 +313,7 @@ write_initramfs_layout() {
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev 2>/dev/null || mount -t tmpfs devtmpfs /dev
+[ -c /dev/console ] && exec 0</dev/console 1>/dev/console 2>&1
 mkdir -p /dev/pts /tmp /run
 mount -t devpts devpts /dev/pts 2>/dev/null || true
 [ -w /proc/sys/kernel/sysrq ] && echo 1 > /proc/sys/kernel/sysrq
