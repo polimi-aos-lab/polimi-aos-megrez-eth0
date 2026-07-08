@@ -6,7 +6,7 @@ loads a repo-generated `boot.scr` from the SD card boot partition.
 ## Build the boot payload
 
 ```sh
-make assemble-boot
+make board-baremetal-smoke
 ```
 
 Default output:
@@ -31,7 +31,7 @@ shell, and keeps `/root/nic-bringup.sh` as a retry/debug command.
 To change the U-Boot SD enumeration, run:
 
 ```sh
-STAGE_DIR=stage/baremetal BOOT_DEV=0 BOOT_PART=1 ./scripts/assemble-boot.sh
+STAGE_DIR=stage/baremetal BOOT_DEV=0 BOOT_PART=1 ./scripts/board-baremetal-smoke.sh
 ```
 
 ## Copy to SD

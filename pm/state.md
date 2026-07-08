@@ -31,7 +31,7 @@ TFTP in `stage/xen/board-xen-smoke/`). `makefile` default `JOBS ?= 1` e propaga
 Verified local gates: `build-artifacts.sh` baremetal con `JOBS=1`;
 `build-artifacts.sh` xen con `JOBS=1`; `build-xen.sh` con `JOBS=1`;
 `board-xen-smoke.sh` con `BOOT_IFACE=tftp`,
-`ENABLE_DOMU1_ETH_PASSTHROUGH=1`, static-mem/direct-map; `assemble-boot.sh`
+`ENABLE_DOMU1_ETH_PASSTHROUGH=1`, static-mem/direct-map; `board-baremetal-smoke.sh`
 baremetal; `bash -n` sugli shell script modificati; `node --check
 scripts/tftp-serve.mjs`; `make -n` sui target build/image.
 

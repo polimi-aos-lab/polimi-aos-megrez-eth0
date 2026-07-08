@@ -5,7 +5,7 @@
 # initramfs, then assemble the bare-metal U-Boot boot payload (megrez initramfs
 # with module autoload via megrez-net-up + boot.scr). All artifacts land under
 # stage/baremetal/. The build step runs through Docker via build-artifacts.sh;
-# assemble-boot.sh is host-native and consumes the generated host-side files.
+# board-baremetal-smoke.sh is host-native and consumes the generated host-side files.
 set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -26,6 +26,6 @@ JOBS="${jobs}" \
     "${script_dir}/build-artifacts.sh" "$@"
 
 log "assembling bare-metal boot payload (megrez initramfs + boot.scr)"
-STAGE_DIR="${stage_baremetal_host}" "${script_dir}/assemble-boot.sh"
+STAGE_DIR="${stage_baremetal_host}" "${script_dir}/board-baremetal-smoke.sh"
 
 log "bare-metal image ready under ${stage_baremetal_host}"

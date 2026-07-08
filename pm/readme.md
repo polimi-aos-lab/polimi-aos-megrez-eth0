@@ -34,7 +34,7 @@ Sources pinned in `sources.lock`: BSP kernel `milkv-megrez/rockos-kernel`; Xen
 - `make build-artifacts-xen` — build domU Linux under `stage/xen/` with NIC
   built-in (`=y`) for the Xen RISC-V domU module-exec limitation.
 - `make build-xen` — build raw Xen and copy it to `stage/xen/xen`.
-- `make assemble-boot` / `make image-baremetal` — create SD/U-Boot Linux payload
+- `make board-baremetal-smoke` / `make image-baremetal` — create SD/U-Boot Linux payload
   in `stage/baremetal/boot/`.
 - `make board-xen-smoke` / `make image-xen` — create SD/U-Boot Xen dom0-less
   smoke payload in `stage/xen/board-xen-smoke/`.

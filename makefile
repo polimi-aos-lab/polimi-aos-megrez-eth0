@@ -5,7 +5,7 @@ PLATFORM ?= $(DEFAULT_PLATFORM)
 TAG ?= polimi-aos-megrez-build-env:$(subst /,-,$(PLATFORM))
 JOBS ?= 1
 
-.PHONY: build-container enter-container toolchain-check fetch-sources build-artifacts build-artifacts-baremetal build-artifacts-xen build-xen assemble-boot image-baremetal image-xen board-xen-smoke mcp-install mcp-typecheck mcp-build mcp-test
+.PHONY: build-container enter-container toolchain-check fetch-sources build-artifacts build-artifacts-baremetal build-artifacts-xen build-xen board-baremetal-smoke image-baremetal image-xen board-xen-smoke mcp-install mcp-typecheck mcp-build mcp-test
 
 build-container:
 	$(DOCKER) build --platform $(PLATFORM) -t $(TAG) .
@@ -36,8 +36,8 @@ build-artifacts-xen:
 build-xen:
 	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(TAG)" STAGE_DIR=/repo/stage/xen SRC_DIR=/repo/stage/src JOBS="$(JOBS)" ./scripts/build-xen.sh
 
-assemble-boot:
-	STAGE_DIR="$(CURDIR)/stage/baremetal" ./scripts/assemble-boot.sh
+board-baremetal-smoke:
+	STAGE_DIR="$(CURDIR)/stage/baremetal" ./scripts/board-baremetal-smoke.sh
 
 image-baremetal:
 	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(TAG)" JOBS="$(JOBS)" ./scripts/image-baremetal.sh
