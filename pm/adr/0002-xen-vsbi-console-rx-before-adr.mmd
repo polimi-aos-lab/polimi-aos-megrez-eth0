@@ -1,0 +1,52 @@
+flowchart TD
+    T["Prima dell'ADR: RX guest rotto"]
+
+    U["Utente digita sulla UART fisica"]
+    F["FIFO RX UART contiene il carattere"]
+
+    XEN{"Xen drena la FIFO UART?"}
+
+    BAD["No sul target reale:<br/>timer Xen/RISC-V mancante<br/>IRQ seriale non usabile"]
+    STUCK["Il carattere resta nella FIFO UART"]
+
+    GOOD["Si, nel design atteso:<br/>IRQ seriale oppure ns16550_poll()"]
+    RX["serial_rx / __serial_rx"]
+    VSBIRX["vsbi_uart_rx_char_xen(DOM1, c)"]
+    RING["Ring input vSBI DOM1"]
+
+    G["Guest Linux hvc0 chiama<br/>SBI CONSOLE_GETCHAR"]
+    CHECK{"Ring vSBI contiene caratteri?"}
+
+    EMPTY["No: ring vuoto"]
+    FAIL["Shell guest visibile<br/>ma non interattiva"]
+
+    OK["Si: carattere consegnato alla shell"]
+
+    T --> U
+    U --> F
+    F --> XEN
+
+    XEN -- "percorso atteso" --> GOOD
+    GOOD --> RX
+    RX --> VSBIRX
+    VSBIRX --> RING
+
+    XEN -- "percorso reale prima del fix" --> BAD
+    BAD --> STUCK
+
+    G --> CHECK
+    RING --> CHECK
+    STUCK -. "nessun enqueue nel ring" .-> CHECK
+
+    CHECK -- "no" --> EMPTY
+    EMPTY --> FAIL
+
+    CHECK -- "si" --> OK
+
+    classDef broken fill:#ffe0e0,stroke:#cc0000,color:#000;
+    classDef ok fill:#e0ffe0,stroke:#008800,color:#000;
+    classDef neutral fill:#eef3ff,stroke:#3355aa,color:#000;
+
+    class BAD,STUCK,EMPTY,FAIL broken;
+    class GOOD,RX,VSBIRX,RING,OK ok;
+    class T,U,F,XEN,G,CHECK neutral;

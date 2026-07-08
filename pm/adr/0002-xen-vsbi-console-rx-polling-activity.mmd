@@ -1,0 +1,94 @@
+flowchart TD
+    Start([Start])
+
+    subgraph User["User / serial terminal"]
+        U1["User types a character"]
+    end
+
+    subgraph UART["Physical UART / ns16550"]
+        H1["Character enters UART RX FIFO"]
+    end
+
+    subgraph Guest["Guest Linux DOM1"]
+        G1["Shell waits on hvc0"]
+        G2["hvc0 / TTY polls for input"]
+        G3["SBI legacy CONSOLE_GETCHAR"]
+        G4["Trap / ecall to Xen"]
+        G5["Guest receives character"]
+        G6["TTY delivers character to shell"]
+        G7["Shell processes user input"]
+        GRetry["No character available: guest polls again later"]
+    end
+
+    subgraph XenVSBI["Xen RISC-V vSBI UART"]
+        X1["vsbi_uart_getchar(regs)"]
+        X2["console_poll_input(regs)"]
+        X3["Lock DOM1 vSBI input ring"]
+        X4{"DOM1 vSBI input ring has character?"}
+        X5["Dequeue character from ring"]
+        X6["Return character to guest"]
+        X7["Return -1 / no character"]
+    end
+
+    subgraph XenSerial["Xen console / serial core"]
+        S1["serial_rx_poll(sercon_handle, regs)"]
+        S2{"sercon_handle valid?"}
+        S3{"driver->getc available?"}
+        S4["serial_rx_one()"]
+        S5["Read character from UART"]
+        S6["Standard Xen serial RX dispatch"]
+        S7["__serial_rx()"]
+        S8{"console_rx == DOM1?"}
+        S9["vsbi_uart_rx_char_xen(DOM1, c)"]
+        S10["Enqueue character into DOM1 vSBI input ring"]
+        SSkip["Skip RX polling"]
+        SOther["Route character to Xen console / other target"]
+    end
+
+    End([End])
+
+    Start --> U1
+    U1 --> H1
+
+    G1 --> G2
+    H1 --> G2
+    G2 --> G3
+    G3 --> G4
+    G4 --> X1
+
+    X1 --> X2
+    X2 --> S1
+
+    S1 --> S2
+    S2 -- "no" --> SSkip
+    S2 -- "yes" --> S3
+
+    S3 -- "no" --> SSkip
+    S3 -- "yes" --> S4
+
+    S4 --> S5
+    S5 --> S6
+    S6 --> S7
+    S7 --> S8
+
+    S8 -- "yes" --> S9
+    S9 --> S10
+    S10 --> X3
+
+    S8 -- "no" --> SOther
+    SOther --> X3
+
+    SSkip --> X3
+
+    X3 --> X4
+
+    X4 -- "yes" --> X5
+    X5 --> X6
+    X6 --> G5
+    G5 --> G6
+    G6 --> G7
+    G7 --> End
+
+    X4 -- "no" --> X7
+    X7 --> GRetry
+    GRetry --> G1

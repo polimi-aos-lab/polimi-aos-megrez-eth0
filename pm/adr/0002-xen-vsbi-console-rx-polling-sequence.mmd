@@ -1,0 +1,64 @@
+sequenceDiagram
+    autonumber
+
+    actor User as Utente seriale
+    participant UART as UART fisica / ns16550
+    participant Guest as Guest Linux DOM1 / hvc0
+    participant XenVSBI as Xen vsbi_uart.c
+    participant XenConsole as Xen console.c
+    participant XenSerial as Xen serial core
+    participant Ring as Ring input vSBI DOM1
+
+    User->>UART: Digita un carattere
+    UART-->>UART: Il carattere resta nella FIFO RX
+
+    loop polling hvc0 lato guest
+        Guest->>XenVSBI: SBI legacy CONSOLE_GETCHAR
+        activate XenVSBI
+
+        XenVSBI->>XenConsole: console_poll_input(regs)
+        activate XenConsole
+
+        XenConsole->>XenSerial: serial_rx_poll(sercon_handle, regs)
+        activate XenSerial
+
+        alt sercon_handle non valido
+            XenSerial-->>XenConsole: nessun polling RX
+        else driver->getc non disponibile
+            XenSerial-->>XenConsole: nessun polling RX
+        else UART contiene caratteri
+            loop fino a serial_rxbufsz caratteri
+                XenSerial->>UART: driver->getc()
+                UART-->>XenSerial: carattere c
+                XenSerial->>XenSerial: serial_rx_one()
+                XenSerial->>XenSerial: dispatch RX standard
+                XenSerial->>XenSerial: __serial_rx()
+
+                alt console_rx == DOM1
+                    XenSerial->>XenVSBI: vsbi_uart_rx_char_xen(DOM1, c)
+                    XenVSBI->>Ring: enqueue c
+                else console_rx diverso da DOM1
+                    XenSerial-->>XenSerial: route verso Xen console / altro target
+                end
+            end
+        else UART vuota
+            XenSerial-->>XenConsole: nessun carattere drenato
+        end
+
+        deactivate XenSerial
+        XenConsole-->>XenVSBI: polling RX completato
+        deactivate XenConsole
+
+        XenVSBI->>Ring: lock ring input
+
+        alt ring contiene carattere
+            Ring-->>XenVSBI: dequeue c
+            XenVSBI-->>Guest: ritorna c da CONSOLE_GETCHAR
+            Guest-->>Guest: hvc0 / TTY consegna c alla shell
+        else ring vuoto
+            XenVSBI-->>Guest: ritorna -1 / nessun carattere
+            Guest-->>Guest: riprova più tardi
+        end
+
+        deactivate XenVSBI
+    end

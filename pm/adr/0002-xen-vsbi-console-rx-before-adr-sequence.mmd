@@ -1,0 +1,41 @@
+sequenceDiagram
+    autonumber
+
+    actor User as Utente seriale
+    participant UART as UART fisica / ns16550
+    participant XenWake as Timer Xen / IRQ seriale
+    participant XenSerial as Xen serial core
+    participant XenVSBI as Xen vsbi_uart.c
+    participant Ring as Ring input vSBI DOM1
+    participant Guest as Guest Linux DOM1 / hvc0
+
+    User->>UART: Digita un carattere c
+    UART-->>UART: c resta nella FIFO RX
+
+    alt percorso originario atteso, se timer o IRQ funzionassero
+        XenWake->>XenSerial: serial_rx_interrupt() / serial_rx()
+        XenSerial->>UART: driver->getc()
+        UART-->>XenSerial: c
+        XenSerial->>XenSerial: __serial_rx()
+        XenSerial->>XenVSBI: vsbi_uart_rx_char_xen(DOM1, c)
+        XenVSBI->>Ring: enqueue c
+    else stato reale prima dell'ADR sul target
+        XenWake--x XenSerial: nessun timer polling funzionante
+        XenWake--x XenSerial: IRQ seriale non usabile
+        UART-->>UART: FIFO RX non drenata
+        XenSerial--x XenVSBI: vsbi_uart_rx_char_xen() non chiamata
+        Ring-->>Ring: ring resta vuoto
+    end
+
+    Guest->>XenVSBI: SBI CONSOLE_GETCHAR
+    XenVSBI->>Ring: prova a leggere il ring input
+
+    alt ring vuoto, caso reale pre-ADR
+        Ring-->>XenVSBI: nessun carattere
+        XenVSBI-->>Guest: -1 / no input
+        Guest-->>Guest: shell visibile ma non interattiva
+    else ring riempito, caso atteso teorico
+        Ring-->>XenVSBI: c
+        XenVSBI-->>Guest: c
+        Guest-->>Guest: shell riceve input
+    end
