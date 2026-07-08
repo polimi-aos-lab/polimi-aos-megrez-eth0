@@ -32,7 +32,7 @@ assemble-boot:
 	./scripts/assemble-boot.sh
 
 board-xen-smoke:
-	./scripts/board-xen-smoke.sh
+	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(TAG)" ./scripts/board-xen-smoke.sh
 
 mcp-install:
 	npm --prefix mcp ci

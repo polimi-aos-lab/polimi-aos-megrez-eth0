@@ -1,0 +1,124 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Milk-V Megrez / EIC7700 GMAC0 domU1 passthrough fragment for Xen dom0-less.
+ * Trusted lab profile only: GMAC0 has no IOMMU protection and uses
+ * dma-noncoherent cache maintenance through the shared ccache controller.
+ */
+
+/dts-v1/;
+
+/ {
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	gic: gic {
+		#interrupt-cells = <1>;
+		#address-cells = <0>;
+		interrupt-controller;
+	};
+
+	aliases {
+		ethernet0 = &domu1_gmac0;
+	};
+
+	passthrough {
+		compatible = "simple-bus";
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		d0_hsp_sp_csr: syscon@50440000 {
+			compatible = "eswin,win2030-hsp-sp-csr", "syscon";
+			reg = <0x0 0x50440000 0x0 0x2000>;
+			xen,path = "/soc/hsp_sp_top_csr@0x50440000";
+			xen,reg = <0x0 0x50440000 0x0 0x2000 0x0 0x50440000>;
+			xen,force-assign-without-iommu;
+		};
+
+		d0_sys_crg: sys-crg@51828000 {
+			compatible = "eswin,win2030-sys-crg", "syscon", "simple-mfd";
+			reg = <0x0 0x51828000 0x0 0x80000>;
+			xen,path = "/soc/sys-crg@51828000";
+			xen,reg = <0x0 0x51828000 0x0 0x80000 0x0 0x51828000>;
+			xen,force-assign-without-iommu;
+
+			d0_reset: reset-controller {
+				compatible = "eswin,win2030-reset";
+				#reset-cells = <2>;
+			};
+
+			d0_clock: clock-controller {
+				compatible = "eswin,win2030-clock";
+				#clock-cells = <1>;
+			};
+		};
+
+		pinctrl: pinctrl@51600080 {
+			compatible = "syscon";
+			reg = <0x0 0x51600080 0x0 0x1fff80>;
+			xen,path = "/soc/pinctrl@0x51600080";
+			xen,reg = <0x0 0x51600000 0x0 0x200000 0x0 0x51600000>;
+			xen,force-assign-without-iommu;
+		};
+
+		ccache: cache-controller@2010000 {
+			compatible = "sifive,ccache1", "cache", "sifive,fu740-c000-ccache";
+			reg = <0x0 0x02010000 0x0 0x4000>,
+			      <0x0 0x08000000 0x0 0x400000>;
+			reg-names = "control", "sideband";
+			cache-block-size = <64>;
+			cache-level = <3>;
+			cache-sets = <4096>;
+			cache-size = <4194304>;
+			cache-unified;
+			interrupt-parent = <&gic>;
+			interrupts = <1 3 4 2>;
+			sifive,a-mshr-count = <60>;
+			sifive,bank-count = <4>;
+			sifive,ecc-granularity = <8>;
+			sifive,max-master-id = <13>;
+			sifive,perfmon-counters = <6>;
+			xen,path = "/soc/cache-controller@2010000";
+			xen,reg = <0x0 0x02010000 0x0 0x4000 0x0 0x02010000
+			           0x0 0x08000000 0x0 0x400000 0x0 0x08000000>;
+			xen,force-assign-without-iommu;
+		};
+
+		domu1_gmac0: ethernet@50400000 {
+			compatible = "eswin,win2030-qos-eth";
+			status = "okay";
+			reg = <0x0 0x50400000 0x0 0x10000>;
+			interrupt-parent = <&gic>;
+			interrupt-names = "macirq";
+			interrupts = <61>;
+			phy-mode = "rgmii";
+			id = <0>;
+			clocks = <&d0_clock 550>,
+				 <&d0_clock 551>,
+				 <&d0_clock 552>;
+			clock-names = "app", "stmmaceth", "tx";
+			resets = <&d0_reset 0x07 0x04000000>;
+			reset-names = "ethrst";
+			dma-noncoherent;
+			eswin,hsp_sp_csr = <&d0_hsp_sp_csr 0x1030 0x100 0x108>;
+			eswin,syscrg_csr = <&d0_sys_crg 0x148 0x14c>;
+			eswin,dly_hsp_reg = <0x114 0x118 0x11c>;
+			eswin,rgmiisel = <&pinctrl 0x290 0x3>;
+			eswin,led-cfgs = <0x6100 0x0a40 0x0420>;
+			dly-param-1000m = <0x23232323 0x800c8023 0x0c0c0c0c>;
+			dly-param-100m = <0x50505050 0x803f8050 0x3f3f3f3f>;
+			dly-param-10m = <0 0 0>;
+			snps,axi-config = <&d0_stmmac_axi_setup>;
+			xen,path = "/soc/ethernet@50400000";
+			xen,reg = <0x0 0x50400000 0x0 0x10000 0x0 0x50400000>;
+			xen,force-assign-without-iommu;
+
+			d0_stmmac_axi_setup: stmmac-axi-config {
+				snps,blen = <0 0 0 0 16 8 4>;
+				snps,rd_osr_lmt = <2>;
+				snps,wr_osr_lmt = <2>;
+				snps,lpi_en = <0>;
+			};
+		};
+	};
+};

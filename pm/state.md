@@ -1,6 +1,6 @@
 # polimi-aos-megrez-eth0 — State
 
-Updated: 2026-07-04
+Updated: 2026-07-08
 
 ## Roadmap
 
@@ -10,9 +10,9 @@ Active (children + detail in bd; run `bd show <id>`):
    deploy/observe/reset contro il driver esistente su Linux bare, tutto su HW.
    Open: `60f.5` reset() SBI-SRST/SysRq (panic=-1, sysrq).
 2. `…-sju` — Fase 3: Xen dom0-less + NIC passthrough su Megrez. Driver esistente
-   funzionante in passthrough. Open: `sju.1` DT passthrough NIC eic7700 al domU;
-   `sju.2` boot Xen→domU sul Megrez; `sju.3` NIC up nel domU sotto Xen; `sju.4`
-   loop agente HW (delta SD via UART → reset → observe).
+   funzionante in passthrough. Open: `sju.1` eth0 UP nel domU con GMAC0 trusted
+   no-IOMMU (scope fuso con `sju.3`, ADR 0003: direct-map, PLIC, ccache, partial
+   DTB); `sju.2` boot Xen→domU sul Megrez; `sju.4` loop agente HW.
 
 Parked: relè USB reset HW (miglioramento del reset SBI/SysRq) · immagine
 multi-arch via registry (se il flusso diventa ripetitivo).

@@ -4,6 +4,36 @@ set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "${script_dir}/.." && pwd)
 
+if [ "${BOARD_XEN_SMOKE_IN_CONTAINER:-0}" != "1" ]; then
+    docker_bin=${DOCKER:-docker}
+    docker_image=${DOCKER_IMAGE:-polimi-aos-megrez-build-env:linux-aarch64}
+    docker_env=(
+        -e BOARD_XEN_SMOKE_IN_CONTAINER=1
+        -e STAGE_DIR=/repo/stage
+    )
+    for name in \
+        OUTPUT_DIR XEN_RAW BOARD_DTB XEN_LOAD_ADDR DTB_LOAD_ADDR BOOT_IFACE \
+        BOOT_DEV BOOT_PART SCRIPT_ADDR FDT_RESIZE XEN_DEPLOY_NAME \
+        DOMU1_KERNEL DOMU1_IMAGE DOMU1_RAMDISK DOMU1_KERNEL_LOAD_ADDR \
+        DOMU1_RAMDISK_LOAD_ADDR DOMU1_BOOTARGS DOMU1_MEMORY DOMU1_CPUS \
+        DOMU2_KERNEL DOMU2_IMAGE DOMU2_RAMDISK DOMU2_KERNEL_LOAD_ADDR \
+        DOMU2_RAMDISK_LOAD_ADDR DOMU2_BOOTARGS DOMU2_MEMORY DOMU2_CPUS \
+        ENABLE_DOMU1_ETH_PASSTHROUGH DOMU1_ETH_DTS DOMU1_ETH_DTB_NAME \
+        DOMU1_ETH_DTB_LOAD_ADDR DOMU1_STATIC_MEM_START DOMU1_STATIC_MEM_SIZE \
+        DOMU1_DIRECT_MAP
+    do
+        if [ -n "${!name:-}" ]; then
+            docker_env+=(-e "${name}")
+        fi
+    done
+    exec "${docker_bin}" run --rm \
+        -v "${repo_root}:/repo" \
+        -w /repo \
+        "${docker_env[@]}" \
+        "${docker_image}" \
+        /bin/bash /repo/scripts/board-xen-smoke.sh "$@"
+fi
+
 stage_dir=${STAGE_DIR:-"${repo_root}/stage"}
 output_dir=${OUTPUT_DIR:-"${stage_dir}/board-xen-smoke"}
 
@@ -38,6 +68,13 @@ domu2_kernel_load_addr=${DOMU2_KERNEL_LOAD_ADDR:-0x8a200000}
 domu2_ramdisk_load_addr=${DOMU2_RAMDISK_LOAD_ADDR:-0x8e200000}
 fdt_resize=${FDT_RESIZE:-2048}
 xen_deploy_name=${XEN_DEPLOY_NAME:-xen.img}
+domu1_eth_passthrough=${ENABLE_DOMU1_ETH_PASSTHROUGH:-0}
+domu1_eth_dts=${DOMU1_ETH_DTS:-"${repo_root}/config/dts/eic7700-megrez-domu1-eth0-passthrough.dts"}
+domu1_eth_dtb_name=${DOMU1_ETH_DTB_NAME:-domu1-eth0.dtb}
+domu1_eth_dtb_load_addr=${DOMU1_ETH_DTB_LOAD_ADDR:-0x88200000}
+domu1_static_mem_start=${DOMU1_STATIC_MEM_START:-}
+domu1_static_mem_size=${DOMU1_STATIC_MEM_SIZE:-}
+domu1_direct_map=${DOMU1_DIRECT_MAP:-0}
 
 xen_bootargs=${XEN_BOOTARGS:-"bootscrub=0 com1=poll sched=null"}
 domu_cpus=${DOMU_CPUS:-0x1}
@@ -51,6 +88,10 @@ Usage: $(basename "$0") [--help]
 
 Generate a board-first Xen dom0-less U-Boot smoke payload in:
   ${output_dir}
+
+By default this script re-executes in Docker for reproducible dtc/mkimage tools:
+  DOCKER=\${DOCKER:-docker} DOCKER_IMAGE=\${DOCKER_IMAGE:-polimi-aos-megrez-build-env:linux-aarch64}
+  BOARD_XEN_SMOKE_IN_CONTAINER=1 is reserved for the in-container re-entry path.
 
 Default inputs:
   XEN_RAW       ${xen_raw}
@@ -68,11 +109,19 @@ Environment overrides:
   BOOT_IFACE BOOT_DEV BOOT_PART SCRIPT_ADDR FDT_RESIZE XEN_DEPLOY_NAME XEN_BOOTARGS DOMU1_BOOTARGS DOMU2_BOOTARGS
   DOMU_CPUS DOMU_MEMORY
 
+Optional domU1 eth0 passthrough:
+  ENABLE_DOMU1_ETH_PASSTHROUGH=1 DOMU1_ETH_DTS=${domu1_eth_dts} DOMU1_ETH_DTB_NAME=${domu1_eth_dtb_name}
+  DOMU1_ETH_DTB_LOAD_ADDR=${domu1_eth_dtb_load_addr}
+  DOMU1_STATIC_MEM_START=<addr> DOMU1_STATIC_MEM_SIZE=<size> DOMU1_DIRECT_MAP=1
+
 BOOT_IFACE may be mmc, usb, or tftp. tftp emits tftpboot commands and expects
 U-Boot serverip/ipaddr to be configured before sourcing boot.scr.
 
 The generated boot flow loads payloads, creates /chosen xen,domain nodes with
-multiboot kernel+ramdisk modules, then runs bootm <xen> - <dtb>.
+multiboot kernel+ramdisk modules, then runs bootm <xen> - <dtb>. The opt-in
+eth0 path also loads a multiboot,device-tree module for domU1 and is trusted
+no-IOMMU lab plumbing: use static direct-map RAM before traffic, and verify the
+Xen PLIC IRQ plus ccache/cache-maintenance paths.
 
 EOF
 }
@@ -133,6 +182,46 @@ assert_uboot_string() {
             fail "${name} must not contain newlines or double quotes"
             ;;
     esac
+}
+
+assert_plain_filename() {
+    local name=${1:?name required}
+    local value=${2-}
+    case "${value}" in
+        ""|*/*)
+            fail "${name} must be a plain filename, got: ${value}"
+            ;;
+    esac
+}
+
+validate_options() {
+    case "${domu1_eth_passthrough}" in
+        0|1)
+            ;;
+        *)
+            fail "ENABLE_DOMU1_ETH_PASSTHROUGH must be 0 or 1, got: ${domu1_eth_passthrough}"
+            ;;
+    esac
+    case "${domu1_direct_map}" in
+        0|1)
+            ;;
+        *)
+            fail "DOMU1_DIRECT_MAP must be 0 or 1, got: ${domu1_direct_map}"
+            ;;
+    esac
+
+    assert_plain_filename XEN_DEPLOY_NAME "${xen_deploy_name}"
+    if [ "${domu1_eth_passthrough}" = "1" ]; then
+        assert_plain_filename DOMU1_ETH_DTB_NAME "${domu1_eth_dtb_name}"
+    fi
+
+    if { [ -n "${domu1_static_mem_start}" ] && [ -z "${domu1_static_mem_size}" ]; } ||
+       { [ -z "${domu1_static_mem_start}" ] && [ -n "${domu1_static_mem_size}" ]; }; then
+        fail "DOMU1_STATIC_MEM_START and DOMU1_STATIC_MEM_SIZE must be set together"
+    fi
+    if [ "${domu1_direct_map}" = "1" ] && [ -z "${domu1_static_mem_start}" ]; then
+        fail "DOMU1_DIRECT_MAP=1 requires DOMU1_STATIC_MEM_START and DOMU1_STATIC_MEM_SIZE"
+    fi
 }
 
 storage_preamble() {
@@ -211,6 +300,30 @@ EOF
     fi
 }
 
+write_domu1_static_options() {
+    if [ -n "${domu1_static_mem_start}" ]; then
+        cat <<EOF
+fdt set /chosen/domU1 xen,static-mem <${domu1_static_mem_start} ${domu1_static_mem_size}>
+EOF
+    fi
+    if [ "${domu1_direct_map}" = "1" ]; then
+        cat <<EOF
+fdt set /chosen/domU1 direct-map
+EOF
+    fi
+}
+
+write_domu1_eth_dtb_module() {
+    local dtb_size
+
+    dtb_size=$(hex_size "${output_dir}/${domu1_eth_dtb_name}")
+    cat <<EOF
+fdt mknode /chosen/domU1 module@${domu1_eth_dtb_load_addr}
+fdt set /chosen/domU1/module@${domu1_eth_dtb_load_addr} compatible "multiboot,device-tree" "multiboot,module"
+fdt set /chosen/domU1/module@${domu1_eth_dtb_load_addr} reg <${domu1_eth_dtb_load_addr} ${dtb_size}>
+EOF
+}
+
 write_boot_cmd() {
     local boot_cmd=${1:?boot.cmd output required}
     local domu1_kernel_size domu1_ramdisk_size domu2_kernel_size domu2_ramdisk_size
@@ -237,6 +350,11 @@ EOF
 $(storage_load "${domu1_ramdisk_load_addr}" domu1.rd)
 EOF
         fi
+        if [ "${domu1_eth_passthrough}" = "1" ]; then
+            cat <<EOF
+$(storage_load "${domu1_eth_dtb_load_addr}" "${domu1_eth_dtb_name}")
+EOF
+        fi
         if [ -n "${domu2_kernel}" ] && [ -n "${domu2_ramdisk}" ]; then
             domu2_kernel_size=$(hex_size "${output_dir}/domu2.img")
             domu2_ramdisk_size=$(hex_size "${output_dir}/domu2.rd")
@@ -255,6 +373,10 @@ EOF
             write_domain_node domU1 "${domu1_kernel_load_addr}" "${output_dir}/domu1.img" "${domu1_ramdisk_load_addr}" "${output_dir}/domu1.rd" "${domu1_bootargs}"
         else
             write_domain_node domU1 "${domu1_kernel_load_addr}" "${output_dir}/domu1.img" "" "" "${domu1_bootargs}"
+        fi
+        write_domu1_static_options
+        if [ "${domu1_eth_passthrough}" = "1" ]; then
+            write_domu1_eth_dtb_module
         fi
         if [ -n "${domu2_kernel}" ] && [ -n "${domu2_ramdisk}" ]; then
             write_domain_node domU2 "${domu2_kernel_load_addr}" "${output_dir}/domu2.img" "${domu2_ramdisk_load_addr}" "${output_dir}/domu2.rd" "${domu2_bootargs}"
@@ -286,6 +408,9 @@ Megrez Xen dom0-less board smoke payload
 ========================================
 
 Generated by scripts/board-xen-smoke.sh.
+Default workflow is containerized for reproducible dtc/mkimage tools:
+  make board-xen-smoke
+
 
 Files
 -----
@@ -297,6 +422,13 @@ Files
 - domu1.rd    Optional domU1 initramfs loaded at ${domu1_ramdisk_load_addr} when DOMU1_RAMDISK is non-empty.
 - domu2.img   Optional second domU2 Linux kernel Image loaded at ${domu2_kernel_load_addr}.
 - domu2.rd    Optional second domU2 initramfs loaded at ${domu2_ramdisk_load_addr}.
+EOF
+    if [ "${domu1_eth_passthrough}" = "1" ]; then
+        cat >> "${output}" <<EOF
+- ${domu1_eth_dtb_name}  domU1 GMAC0 passthrough DTB compiled from ${domu1_eth_dts}, loaded at ${domu1_eth_dtb_load_addr}.
+EOF
+    fi
+    cat >> "${output}" <<EOF
 - boot.cmd    Plain U-Boot commands.
 - boot.scr    U-Boot script image.
 
@@ -317,19 +449,42 @@ Success criteria
 The serial console should show Xen parsing the mutated /chosen node and booting
 one or more dom0-less Linux domains with kernel + initramfs modules.
 
+domU1 eth0 passthrough (optional)
+---------------------------------
+ENABLE_DOMU1_ETH_PASSTHROUGH=${domu1_eth_passthrough}. Set it to 1 to compile
+DOMU1_ETH_DTS (${domu1_eth_dts}) with dtc, copy it as DOMU1_ETH_DTB_NAME
+(${domu1_eth_dtb_name}), load it at DOMU1_ETH_DTB_LOAD_ADDR
+(${domu1_eth_dtb_load_addr}), and register it under /chosen/domU1 as a
+multiboot,device-tree module.
+
+This is trusted no-IOMMU lab plumbing. GMAC0 is assigned with
+xen,force-assign-without-iommu, so the guest must be trusted: the NIC can DMA
+to machine addresses. Before real traffic, set DOMU1_STATIC_MEM_START and
+DOMU1_STATIC_MEM_SIZE and use DOMU1_DIRECT_MAP=1 so guest physical RAM, DMA
+buffers, and ccache physical cache-maintenance addresses are identical. The Xen
+branch must expose/route Megrez PLIC IRQ 61 to domU1 and provide the ccache
+IRQ/MMIO path; an eth0 probe without working PLIC/cache support is not a valid
+UP test.
+
 Notes
 -----
-Default filenames are 8.3-safe for FAT. If the board/user-proven path requires
-the historical long name, regenerate with XEN_DEPLOY_NAME=xen.uImage; otherwise
-copy the payload host-side to avoid Linux initramfs FAT/NLS aliasing.
+Core default filenames are 8.3-safe for FAT. If the board/user-proven path
+requires the historical long Xen name, regenerate with XEN_DEPLOY_NAME=xen.uImage;
+otherwise copy the payload host-side to avoid Linux initramfs FAT/NLS aliasing.
+The opt-in DOMU1_ETH_DTB_NAME default follows ADR 0003 (${domu1_eth_dtb_name});
+override it if your FAT/U-Boot path needs an 8.3-safe DTB filename.
 EOF
 }
 
 main() {
+    validate_options
     require_command cp
     require_command install
     require_command mkimage
     require_command stat
+    if [ "${domu1_eth_passthrough}" = "1" ]; then
+        require_command dtc
+    fi
     require_file "${xen_raw}"
     require_file "${board_dtb}"
     require_file "${domu1_kernel}"
@@ -342,6 +497,9 @@ main() {
         fi
         require_file "${domu2_kernel}"
         require_file "${domu2_ramdisk}"
+    fi
+    if [ "${domu1_eth_passthrough}" = "1" ]; then
+        require_file "${domu1_eth_dts}"
     fi
 
     log "preparing ${output_dir}"
@@ -357,12 +515,11 @@ main() {
         install -m 0644 "${domu2_kernel}" "${output_dir}/domu2.img"
         install -m 0644 "${domu2_ramdisk}" "${output_dir}/domu2.rd"
     fi
+    if [ "${domu1_eth_passthrough}" = "1" ]; then
+        log "compiling domU1 eth0 passthrough DTB ${domu1_eth_dtb_name}"
+        dtc -I dts -O dtb -o "${output_dir}/${domu1_eth_dtb_name}" "${domu1_eth_dts}"
+    fi
 
-    case "${xen_deploy_name}" in
-        ""|*/*)
-            fail "XEN_DEPLOY_NAME must be a plain filename, got: ${xen_deploy_name}"
-            ;;
-    esac
 
     log "wrapping Xen as ${xen_deploy_name}"
     mkimage -A RISCV -T kernel -a "${xen_load_addr}" -e "${xen_load_addr}" \
