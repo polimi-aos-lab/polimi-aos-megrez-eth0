@@ -51,7 +51,13 @@ elif [ -f "${stage_dir}/hifive-premier-550-plain.dtb" ]; then
 else
     board_dtb="${stage_dir}/eic7700-milkv-megrez.dtb"
 fi
-domu1_kernel=${DOMU1_KERNEL:-${DOMU1_IMAGE:-"${stage_dir}/Image"}}
+if [ -n "${DOMU1_KERNEL:-${DOMU1_IMAGE:-}}" ]; then
+    domu1_kernel=${DOMU1_KERNEL:-${DOMU1_IMAGE}}
+elif [ -f "${stage_dir}/Image.gz" ]; then
+    domu1_kernel="${stage_dir}/Image.gz"
+else
+    domu1_kernel="${stage_dir}/Image"
+fi
 domu1_ramdisk=${DOMU1_RAMDISK-"${stage_dir}/initramfs.cpio.gz"}
 domu2_kernel=${DOMU2_KERNEL:-${DOMU2_IMAGE:-}}
 domu2_ramdisk=${DOMU2_RAMDISK:-}
@@ -97,11 +103,12 @@ Default inputs:
   XEN_RAW       ${xen_raw}
   BOARD_DTB     ${board_dtb}
   DOMU1_KERNEL  ${domu1_kernel}
+  Default prefers ${stage_dir}/Image.gz when present, falling back to ${stage_dir}/Image.
   DOMU1_IMAGE   legacy alias for DOMU1_KERNEL
   DOMU1_RAMDISK ${domu1_ramdisk}
 
 Optional second guest:
-  DOMU2_KERNEL=/path/to/Image DOMU2_RAMDISK=/path/to/initramfs.cpio.gz $(basename "$0")
+  DOMU2_KERNEL=/path/to/Image.gz DOMU2_RAMDISK=/path/to/initramfs.cpio.gz $(basename "$0")
 
 Environment overrides:
   STAGE_DIR OUTPUT_DIR XEN_RAW BOARD_DTB DOMU1_KERNEL DOMU1_IMAGE DOMU1_RAMDISK DOMU2_KERNEL DOMU2_IMAGE DOMU2_RAMDISK
@@ -418,7 +425,7 @@ Files
               mkimage -A RISCV -T kernel -a ${xen_load_addr} -e ${xen_load_addr} -C none -d <xen> ${xen_deploy_name}
               Default is xen.img to stay 8.3-safe on FAT SD paths.
 - board.dtb   Base board DTB loaded at ${dtb_load_addr}.
-- domu1.img   Required domU1 Linux kernel Image loaded at ${domu1_kernel_load_addr}.
+- domu1.img   Required domU1 Linux kernel payload loaded at ${domu1_kernel_load_addr}; default source is Image.gz when present.
 - domu1.rd    Optional domU1 initramfs loaded at ${domu1_ramdisk_load_addr} when DOMU1_RAMDISK is non-empty.
 - domu2.img   Optional second domU2 Linux kernel Image loaded at ${domu2_kernel_load_addr}.
 - domu2.rd    Optional second domU2 initramfs loaded at ${domu2_ramdisk_load_addr}.
