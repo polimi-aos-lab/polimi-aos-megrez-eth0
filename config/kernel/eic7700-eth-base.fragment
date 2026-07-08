@@ -1,14 +1,16 @@
-# Fragment for merge_config.sh on stage/src/rockos-kernel/arch/riscv/configs/win2030_defconfig.
-# Verified BSP Ethernet glue: DWMAC_WIN2030 (driver dwmac-win2030.c), compatible "eswin,win2030-qos-eth".
-CONFIG_STMMAC_ETH=m
-CONFIG_STMMAC_PLATFORM=m
-CONFIG_DWMAC_WIN2030=m
+# Shared base fragment for merge_config.sh on
+# stage/src/rockos-kernel/arch/riscv/configs/win2030_defconfig.
+#
+# Headless serial-console/NIC baseline, common to both build profiles
+# (bare-metal and Xen). The NIC tristate symbols live in the per-profile
+# overrides (eic7700-eth-baremetal.fragment / eic7700-eth-xen.fragment),
+# which are merged AFTER this base so their value wins.
 CONFIG_MAGIC_SYSRQ=y
 
-# Headless serial-console/NIC baseline: do not build graphics, media, audio,
-# wireless, firewall/overlay networking, regulator, crypto, or accelerator
-# stacks from the vendor defconfig. They are not needed to boot Megrez far
-# enough to load the Ethernet module and dominate kernel build time.
+# Do not build graphics, media, audio, wireless, firewall/overlay networking,
+# regulator, crypto, or accelerator stacks from the vendor defconfig. They are
+# not needed to boot Megrez far enough to bring up Ethernet and they dominate
+# kernel build time.
 # DRM_IMG_VOLCANIC selects DRM, so keep both the selector and the parent off.
 # CONFIG_DRM_IMG_VOLCANIC is not set
 # CONFIG_DRM_IMG is not set

@@ -18,15 +18,15 @@ function usage() {
 Serve files read-only over TFTP for U-Boot tests.
 
 Options:
-  --root PATH     Directory to serve (default: stage/board-xen-smoke)
+  --root PATH     Directory to serve (default: stage/xen/board-xen-smoke)
   --host HOST     Address to bind (default: 0.0.0.0)
   --port PORT     UDP port (default: 6969; use 69 for real U-Boot TFTP)
   --timeout MS    ACK timeout before retransmit (default: 5000)
   -h, --help      Show this help
 
 Examples:
-  scripts/tftp-serve.mjs --root stage/board-xen-smoke --port 6969
-  sudo scripts/tftp-serve.mjs --root stage/board-xen-smoke --port 69`);
+  scripts/tftp-serve.mjs --root stage/xen/board-xen-smoke --port 6969
+  sudo scripts/tftp-serve.mjs --root stage/xen/board-xen-smoke --port 69`);
 }
 
 function parsePositiveInt(value, name) {
@@ -47,7 +47,7 @@ function requireValue(argv, index, option) {
 
 function parseArgs(argv) {
   const options = {
-    root: 'stage/board-xen-smoke',
+    root: 'stage/xen/board-xen-smoke',
     host: '0.0.0.0',
     port: 6969,
     timeoutMs: 5000,

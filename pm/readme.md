@@ -28,17 +28,24 @@ Sources pinned in `sources.lock`: BSP kernel `milkv-megrez/rockos-kernel`; Xen
 
 - `make build-container` — Docker build image (`TAG`/`PLATFORM` overrideable).
 - `make fetch-sources` — materialize pinned sources under `stage/src/`.
-- `make build-artifacts` — build Linux `Image(.gz)`, modules, initramfs, DTB.
-- `make build-xen` — build raw Xen and copy it to `stage/xen`.
-- `make assemble-boot` — create SD/U-Boot Linux payload in `stage/boot/`.
-- `make board-xen-smoke` — create SD/U-Boot Xen dom0-less smoke payload in
-  `stage/board-xen-smoke/` (default `BOOT_IFACE=mmc BOOT_DEV=1 BOOT_PART=1`).
+- `make build-artifacts` — sequential aggregate for both profiles.
+- `make build-artifacts-baremetal` — build no-Xen Linux under `stage/baremetal/`
+  with NIC as modules (`=m`).
+- `make build-artifacts-xen` — build domU Linux under `stage/xen/` with NIC
+  built-in (`=y`) for the Xen RISC-V domU module-exec limitation.
+- `make build-xen` — build raw Xen and copy it to `stage/xen/xen`.
+- `make assemble-boot` / `make image-baremetal` — create SD/U-Boot Linux payload
+  in `stage/baremetal/boot/`.
+- `make board-xen-smoke` / `make image-xen` — create SD/U-Boot Xen dom0-less
+  smoke payload in `stage/xen/board-xen-smoke/`.
 
 ## Conventions
 
-- Kernel baseline = BSP `win2030_defconfig` + `config/kernel/eic7700-eth.fragment`
-  (`STMMAC_ETH=m`, `STMMAC_PLATFORM=m`, `DWMAC_WIN2030=m`, `MAGIC_SYSRQ=y`,
-  headless wired baseline; no DRM/media/audio/wireless/firewall/noisy extras).
+- Kernel baseline = BSP `win2030_defconfig` + shared
+  `config/kernel/eic7700-eth-base.fragment` + one profile override:
+  `eic7700-eth-baremetal.fragment` (`STMMAC_ETH=m`,
+  `STMMAC_PLATFORM=m`, `DWMAC_WIN2030=m`) or `eic7700-eth-xen.fragment`
+  (`STMMAC_ETH=y`, `STMMAC_PLATFORM=y`, `DWMAC_WIN2030=y`).
 - Megrez NIC uses BSP `DWMAC_WIN2030` (`dwmac-win2030.c`, compatible
   `eswin,win2030-qos-eth`), not newer upstream `DWMAC_EIC7700`.
 - Board reset = SBI SRST + magic SysRq over serial (`panic=-1`); cannot recover

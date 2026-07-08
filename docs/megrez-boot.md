@@ -12,7 +12,7 @@ make assemble-boot
 Default output:
 
 ```text
-stage/boot/
+stage/baremetal/boot/
   boot.cmd
   boot.scr
   Image
@@ -31,7 +31,7 @@ shell, and keeps `/root/nic-bringup.sh` as a retry/debug command.
 To change the U-Boot SD enumeration, run:
 
 ```sh
-BOOT_DEV=0 BOOT_PART=1 ./scripts/assemble-boot.sh
+STAGE_DIR=stage/baremetal BOOT_DEV=0 BOOT_PART=1 ./scripts/assemble-boot.sh
 ```
 
 ## Copy to SD
@@ -43,7 +43,7 @@ Megrez card is FAT; ext4 is also fine if U-Boot can list it). Replace
 ```sh
 sudo mkdir -p /mnt/megrez-boot
 sudo mount /dev/sdX1 /mnt/megrez-boot
-sudo cp -a stage/boot/. /mnt/megrez-boot/
+sudo cp -a stage/baremetal/boot/. /mnt/megrez-boot/
 sync
 sudo umount /mnt/megrez-boot
 ```

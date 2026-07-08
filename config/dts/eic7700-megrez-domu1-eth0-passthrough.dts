@@ -15,6 +15,7 @@
 		#interrupt-cells = <1>;
 		#address-cells = <0>;
 		interrupt-controller;
+		phandle = <0x8001>;
 	};
 
 	aliases {
@@ -29,6 +30,7 @@
 
 		d0_hsp_sp_csr: syscon@50440000 {
 			compatible = "eswin,win2030-hsp-sp-csr", "syscon";
+			phandle = <0x8002>;
 			reg = <0x0 0x50440000 0x0 0x2000>;
 			xen,path = "/soc/hsp_sp_top_csr@0x50440000";
 			xen,reg = <0x0 0x50440000 0x0 0x2000 0x0 0x50440000>;
@@ -37,6 +39,7 @@
 
 		d0_sys_crg: sys-crg@51828000 {
 			compatible = "eswin,win2030-sys-crg", "syscon", "simple-mfd";
+			phandle = <0x8003>;
 			reg = <0x0 0x51828000 0x0 0x80000>;
 			xen,path = "/soc/sys-crg@51828000";
 			xen,reg = <0x0 0x51828000 0x0 0x80000 0x0 0x51828000>;
@@ -44,17 +47,20 @@
 
 			d0_reset: reset-controller {
 				compatible = "eswin,win2030-reset";
+				phandle = <0x8004>;
 				#reset-cells = <2>;
 			};
 
 			d0_clock: clock-controller {
 				compatible = "eswin,win2030-clock";
+				phandle = <0x8005>;
 				#clock-cells = <1>;
 			};
 		};
 
 		pinctrl: pinctrl@51600080 {
 			compatible = "syscon";
+			phandle = <0x8006>;
 			reg = <0x0 0x51600080 0x0 0x1fff80>;
 			xen,path = "/soc/pinctrl@0x51600080";
 			xen,reg = <0x0 0x51600000 0x0 0x200000 0x0 0x51600000>;
@@ -114,6 +120,7 @@
 			xen,force-assign-without-iommu;
 
 			d0_stmmac_axi_setup: stmmac-axi-config {
+			phandle = <0x8007>;
 				snps,blen = <0 0 0 0 16 8 4>;
 				snps,rd_osr_lmt = <2>;
 				snps,wr_osr_lmt = <2>;

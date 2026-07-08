@@ -9,7 +9,7 @@ if [ "${BOARD_XEN_SMOKE_IN_CONTAINER:-0}" != "1" ]; then
     docker_image=${DOCKER_IMAGE:-polimi-aos-megrez-build-env:linux-aarch64}
     docker_env=(
         -e BOARD_XEN_SMOKE_IN_CONTAINER=1
-        -e STAGE_DIR=/repo/stage
+        -e "STAGE_DIR=${STAGE_DIR:-/repo/stage}"
     )
     for name in \
         OUTPUT_DIR XEN_RAW BOARD_DTB XEN_LOAD_ADDR DTB_LOAD_ADDR BOOT_IFACE \
@@ -82,7 +82,7 @@ domu1_static_mem_start=${DOMU1_STATIC_MEM_START:-}
 domu1_static_mem_size=${DOMU1_STATIC_MEM_SIZE:-}
 domu1_direct_map=${DOMU1_DIRECT_MAP:-0}
 
-xen_bootargs=${XEN_BOOTARGS:-"bootscrub=0 com1=poll sched=null"}
+xen_bootargs=${XEN_BOOTARGS:-"bootscrub=0 com1=poll sched=null sync_console"}
 domu_cpus=${DOMU_CPUS:-0x1}
 domu_memory=${DOMU_MEMORY:-"0x0 0x80000"}
 domu1_bootargs=${DOMU1_BOOTARGS-"console=hvc0 rdinit=/init rw panic=-1 sysrq_always_enabled=1"}
@@ -307,10 +307,26 @@ EOF
     fi
 }
 
+domu1_static_mem_cells() {
+    local start_words size_words
+    # The Xen RISC-V parser sees domU1 under /chosen with the parent/default
+    # address format: two address cells and two size cells.  Accept the common
+    # shorthand DOMU1_STATIC_MEM_START=0xa0000000, but emit a full
+    # <addr_hi addr_lo size_hi size_lo> tuple for U-Boot's fdt command.
+    start_words=$(printf '%s\n' "${domu1_static_mem_start}" | wc -w)
+    size_words=$(printf '%s\n' "${domu1_static_mem_size}" | wc -w)
+
+    if [ "${start_words}" -eq 1 ] && [ "${size_words}" -eq 1 ]; then
+        printf '0x0 %s 0x0 %s' "${domu1_static_mem_start}" "${domu1_static_mem_size}"
+    else
+        printf '%s %s' "${domu1_static_mem_start}" "${domu1_static_mem_size}"
+    fi
+}
+
 write_domu1_static_options() {
     if [ -n "${domu1_static_mem_start}" ]; then
         cat <<EOF
-fdt set /chosen/domU1 xen,static-mem <${domu1_static_mem_start} ${domu1_static_mem_size}>
+fdt set /chosen/domU1 xen,static-mem <$(domu1_static_mem_cells)>
 EOF
     fi
     if [ "${domu1_direct_map}" = "1" ]; then

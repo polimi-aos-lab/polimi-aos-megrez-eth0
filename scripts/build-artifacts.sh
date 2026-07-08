@@ -10,8 +10,8 @@ if [ "${BUILD_ARTIFACTS_IN_CONTAINER:-0}" != 1 ]; then
     docker_env=(-e BUILD_ARTIFACTS_IN_CONTAINER=1)
 
     for name in \
-        STAGE_DIR SRC_DIR BUILD_DIR KERNEL_DIR KERNEL_BUILD_DIR MODULES_STAGE_DIR ROOTFS_DIR \
-        ARCH CROSS_COMPILE JOBS KERNEL_DEFCONFIG KERNEL_FRAGMENT DTB_NAME DRIVER_MODULE \
+        PROFILE STAGE_ROOT STAGE_DIR SRC_DIR BUILD_DIR KERNEL_DIR KERNEL_BUILD_DIR MODULES_STAGE_DIR ROOTFS_DIR \
+        ARCH CROSS_COMPILE JOBS KERNEL_DEFCONFIG KERNEL_BASE_FRAGMENT KERNEL_FRAGMENT DTB_NAME DRIVER_MODULE \
         BUSYBOX_VERSION BUSYBOX_SRC_DIR BUSYBOX_BUILD_DIR LRZSZ_VERSION LRZSZ_SRC_DIR LRZSZ_BUILD_DIR
     do
         if [ "${!name+x}" = x ]; then
@@ -28,19 +28,28 @@ if [ "${BUILD_ARTIFACTS_IN_CONTAINER:-0}" != 1 ]; then
 fi
 
 
-stage_dir=${STAGE_DIR:-"${repo_root}/stage"}
-src_dir=${SRC_DIR:-"${stage_dir}/src"}
-build_dir=${BUILD_DIR:-"${stage_dir}/build"}
+profile=${PROFILE:-baremetal}
+case "${profile}" in
+    baremetal) profile_nic_fragment="config/kernel/eic7700-eth-baremetal.fragment"; expected_nic=m ;;
+    xen)       profile_nic_fragment="config/kernel/eic7700-eth-xen.fragment";       expected_nic=y ;;
+    *) printf 'error: unknown PROFILE %s (want baremetal|xen)\n' "${profile}" >&2; exit 2 ;;
+esac
+
+stage_root=${STAGE_ROOT:-"${repo_root}/stage"}
+stage_dir=${STAGE_DIR:-"${stage_root}/${profile}"}
+src_dir=${SRC_DIR:-"${stage_root}/src"}
+build_dir=${BUILD_DIR:-"${stage_root}/build"}
 kernel_dir=${KERNEL_DIR:-"${src_dir}/rockos-kernel"}
-kernel_build_dir=${KERNEL_BUILD_DIR:-"${build_dir}/kernel"}
+kernel_build_dir=${KERNEL_BUILD_DIR:-"${build_dir}/kernel-${profile}"}
 modules_stage_dir=${MODULES_STAGE_DIR:-"${stage_dir}/modules"}
-rootfs_dir=${ROOTFS_DIR:-"${build_dir}/initramfs-root"}
+rootfs_dir=${ROOTFS_DIR:-"${build_dir}/initramfs-root-${profile}"}
 
 arch=${ARCH:-riscv}
 cross_compile=${CROSS_COMPILE:-riscv64-linux-gnu-}
 jobs=${JOBS:-$(nproc)}
 defconfig=${KERNEL_DEFCONFIG:-win2030_defconfig}
-fragment=${KERNEL_FRAGMENT:-"${repo_root}/config/kernel/eic7700-eth.fragment"}
+base_fragment=${KERNEL_BASE_FRAGMENT:-"${repo_root}/config/kernel/eic7700-eth-base.fragment"}
+nic_fragment=${KERNEL_FRAGMENT:-"${repo_root}/${profile_nic_fragment}"}
 dtb_name=${DTB_NAME:-eic7700-milkv-megrez.dtb}
 driver_module=${DRIVER_MODULE:-dwmac-win2030.ko}
 
@@ -56,12 +65,13 @@ usage() {
     cat <<EOF
 Usage: $(basename "$0") [--skip-kernel] [--skip-initramfs] [--help]
 
-Build Megrez RISC-V artifacts into ${stage_dir}:
-  Image, Image.gz, ${dtb_name}, ${driver_module}, modules/, initramfs.cpio.gz.
+Build Megrez RISC-V artifacts into ${stage_dir} (PROFILE=${profile}):
+  Image, Image.gz, ${dtb_name}, modules/, initramfs.cpio.gz.
+  ${driver_module} is staged only when the selected NIC profile builds it as =m.
 
 Environment overrides:
-  STAGE_DIR SRC_DIR BUILD_DIR KERNEL_DIR KERNEL_BUILD_DIR MODULES_STAGE_DIR
-  ARCH CROSS_COMPILE JOBS KERNEL_DEFCONFIG KERNEL_FRAGMENT DTB_NAME DRIVER_MODULE
+  PROFILE STAGE_ROOT STAGE_DIR SRC_DIR BUILD_DIR KERNEL_DIR KERNEL_BUILD_DIR MODULES_STAGE_DIR
+  ARCH CROSS_COMPILE JOBS KERNEL_DEFCONFIG KERNEL_BASE_FRAGMENT KERNEL_FRAGMENT DTB_NAME DRIVER_MODULE
   BUSYBOX_VERSION BUSYBOX_SRC_DIR BUSYBOX_BUILD_DIR
   LRZSZ_VERSION LRZSZ_SRC_DIR LRZSZ_BUILD_DIR
   Run scripts/fetch-sources.sh first to materialize kernel, BusyBox, and lrzsz sources.
@@ -123,19 +133,21 @@ kernel_make() {
 
 prepare_kernel_config() {
     require_dir "${kernel_dir}"
-    require_file "${fragment}"
+    require_file "${base_fragment}"
+    require_file "${nic_fragment}"
     require_file "${kernel_dir}/arch/${arch}/configs/${defconfig}"
     require_file "${kernel_dir}/scripts/kconfig/merge_config.sh"
 
     mkdir -p "${kernel_build_dir}"
-    log "merging ${defconfig} + $(realpath --relative-to="${repo_root}" "${fragment}")"
+    log "merging ${defconfig} + $(realpath --relative-to="${repo_root}" "${base_fragment}") + $(realpath --relative-to="${repo_root}" "${nic_fragment}") [profile=${profile}]"
     (
         cd "${kernel_dir}"
         ARCH="${arch}" CROSS_COMPILE="${cross_compile}" \
             scripts/kconfig/merge_config.sh \
             -O "${kernel_build_dir}" \
             "arch/${arch}/configs/${defconfig}" \
-            "${fragment}"
+            "${base_fragment}" \
+            "${nic_fragment}"
     )
 }
 
@@ -144,16 +156,21 @@ assert_kernel_config() {
     require_file "${config}"
 
     for setting in \
-        CONFIG_STMMAC_ETH=m \
-        CONFIG_STMMAC_PLATFORM=m \
-        CONFIG_DWMAC_WIN2030=m \
-        CONFIG_MAGIC_SYSRQ=y
+        CONFIG_STMMAC_ETH \
+        CONFIG_STMMAC_PLATFORM \
+        CONFIG_DWMAC_WIN2030
     do
-        if ! grep -qx -- "${setting}" "${config}"; then
-            printf 'error: final kernel config missing %s\n' "${setting}" >&2
+        if ! grep -qx -- "${setting}=${expected_nic}" "${config}"; then
+            printf 'error: profile %s expects %s=%s in final kernel config\n' \
+                "${profile}" "${setting}" "${expected_nic}" >&2
             exit 1
         fi
     done
+
+    if ! grep -qx -- "CONFIG_MAGIC_SYSRQ=y" "${config}"; then
+        printf 'error: final kernel config missing CONFIG_MAGIC_SYSRQ=y\n' >&2
+        exit 1
+    fi
 
     for setting in \
         CONFIG_DRM \
@@ -223,12 +240,19 @@ build_kernel_artifacts() {
     require_file "${image}"
     require_file "${image_gz}"
     require_file "${dtb}"
-    require_file "${driver}"
 
+    mkdir -p "${stage_dir}"
+    # Clear a stale module from a previous =m build so a =y (built-in) profile
+    # never leaves an orphan .ko behind (reproducibility across profile switches).
+    rm -f -- "${stage_dir}/${driver_module}"
     install -m 0644 "${image}" "${stage_dir}/Image"
     install -m 0644 "${image_gz}" "${stage_dir}/Image.gz"
     install -m 0644 "${dtb}" "${stage_dir}/${dtb_name}"
-    install -m 0644 "${driver}" "${stage_dir}/${driver_module}"
+    # The NIC driver ships as a module (=m) or is built-in (=y). Only stage the
+    # .ko when it was actually built as a module.
+    if [ -f "${driver}" ]; then
+        install -m 0644 "${driver}" "${stage_dir}/${driver_module}"
+    fi
 }
 
 build_busybox() {
@@ -350,12 +374,28 @@ build_initramfs() {
     require_file "${stage_dir}/initramfs.cpio.gz"
 }
 
+prepare_stage_dirs() {
+    # Old Xen builds staged the raw hypervisor as a file at stage/xen. The
+    # profiled layout uses stage/xen/ as a directory, so direct
+    # `make build-artifacts-xen` must clean that exact legacy file too.
+    if [ -f "${stage_dir}" ]; then
+        if [ "${profile}" = xen ] && [ "${stage_dir}" = "${stage_root}/xen" ]; then
+            rm -f -- "${stage_dir}"
+        else
+            printf 'error: stage path exists as a file: %s\n' "${stage_dir}" >&2
+            exit 1
+        fi
+    fi
+
+    mkdir -p "${stage_dir}" "${build_dir}" "${src_dir}"
+}
+
 main() {
     require_command make
     require_command cpio
     require_command grep
     require_command install
-    mkdir -p "${stage_dir}" "${build_dir}" "${src_dir}"
+    prepare_stage_dirs
 
     if [ "${skip_kernel}" != true ]; then
         build_kernel_artifacts

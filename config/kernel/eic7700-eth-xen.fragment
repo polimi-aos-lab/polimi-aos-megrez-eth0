@@ -1,0 +1,9 @@
+# Xen domU profile override, merged after eic7700-eth-base.fragment.
+# NIC BUILT-IN (=y): under the Xen RISC-V fork, loaded module text is not
+# executable in the domU (instruction page fault; see bead sju.12), so the NIC
+# stack must be built into the kernel and the domU uses a minimal initramfs with
+# no insmod (ADR 0003 decision 8). The PHY/MDIO/PCS closure ends up in
+# modules.builtin.
+CONFIG_STMMAC_ETH=y
+CONFIG_STMMAC_PLATFORM=y
+CONFIG_DWMAC_WIN2030=y

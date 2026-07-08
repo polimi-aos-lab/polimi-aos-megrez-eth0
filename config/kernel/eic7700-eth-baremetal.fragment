@@ -1,0 +1,8 @@
+# Bare-metal (no-Xen) profile override, merged after eic7700-eth-base.fragment.
+# NIC as LOADABLE MODULES: the initramfs (megrez, built by assemble-boot.sh)
+# loads them via /usr/sbin/megrez-net-up. The PHY/MDIO/PCS closure
+# (libphy/phylink/fixed_phy/mdio_devres/fwnode_mdio/of_mdio/pcs_xpcs) follows
+# the =m tristate of its stmmac users and is produced as .ko.
+CONFIG_STMMAC_ETH=m
+CONFIG_STMMAC_PLATFORM=m
+CONFIG_DWMAC_WIN2030=m

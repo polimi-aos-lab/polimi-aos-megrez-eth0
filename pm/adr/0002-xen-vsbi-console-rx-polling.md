@@ -160,7 +160,7 @@ Payload TFTP finale:
 make board-xen-smoke \
   BOOT_IFACE=tftp \
   XEN_BOOTARGS='bootscrub=0 com1=poll sched=null sync_console' \
-  DOMU1_KERNEL=stage/Image.gz \
+  DOMU1_KERNEL=stage/xen/Image.gz \
   DOMU1_KERNEL_LOAD_ADDR=0x8a200000 \
   DOMU1_BOOTARGS='rw root=/dev/ram console=hvc0 earlycon=sbi rdinit=/init panic=-1 sysrq_always_enabled=1'
 ```

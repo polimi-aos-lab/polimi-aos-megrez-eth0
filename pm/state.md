@@ -19,20 +19,22 @@ multi-arch via registry (se il flusso diventa ripetitivo).
 
 ## Handoff
 
-Written: 2026-07-04 · assistant
+Written: 2026-07-08 · assistant
 
-Done: completed `60f.4` board-first Xen smoke path. Added
-`scripts/build-xen.sh`/`make build-xen`, `scripts/board-xen-smoke.sh`/`make
-board-xen-smoke`, and MCP U-Boot UART tools `uboot_run` + `uboot_fatwrite`
-for paced CR commands, `loady`/YMODEM, `fatwrite`, and `fatls` verification.
-State: `npm --prefix mcp run typecheck`, `npm --prefix mcp run build`,
-`bash -n scripts/board-xen-smoke.sh`, and `scripts/board-xen-smoke.sh --help`
-passed. Board preflight showed U-Boot from SD; copying `stage/board-xen-smoke/`
-to the SD boot partition and sourcing `boot.scr` reaches Xen and creates domU1;
-the current Linux domU then panics on RISC-V guest store handling, which belongs
-to the Xen/domU phase (`…-sju`), not the transport/smoke plumbing. Next:
-1) `60f.5` reset policy 2) `sju.2`/`sju.3` diagnose Linux domU under Xen.
-Gotchas: close any `screen`/serial consumer before MCP UART tools; keep SD/FAT
-updates host-side when possible; default `xen.img` avoids long-name FAT/NLS
-aliasing, use `XEN_DEPLOY_NAME=xen.uImage` only if a board-proven path requires it.
-Blockers: none for `60f.4`.
+State: `sju.13` refactor build chiuso. Layout build corrente:
+`stage/baremetal/` per no-Xen (`STMMAC/DWMAC=m`, `dwmac-win2030.ko`,
+payload SD in `stage/baremetal/boot/`) e `stage/xen/` per domU Xen
+(`STMMAC/DWMAC=y`, nessun `.ko` stale, raw Xen in `stage/xen/xen`, payload
+TFTP in `stage/xen/board-xen-smoke/`). `makefile` default `JOBS ?= 1` e propaga
+`JOBS` ai target build/image per non saturare la workstation.
+
+Verified local gates: `build-artifacts.sh` baremetal con `JOBS=1`;
+`build-artifacts.sh` xen con `JOBS=1`; `build-xen.sh` con `JOBS=1`;
+`board-xen-smoke.sh` con `BOOT_IFACE=tftp`,
+`ENABLE_DOMU1_ETH_PASSTHROUGH=1`, static-mem/direct-map; `assemble-boot.sh`
+baremetal; `bash -n` sugli shell script modificati; `node --check
+scripts/tftp-serve.mjs`; `make -n` sui target build/image.
+
+Blocker corrente per chiudere `sju.1`: `sju.11` (`ip link set eth0 up` causa
+panic Xen per store DMA fuori p2m in profilo no-IOMMU direct-map). Non chiudere
+`sju.1` finché eth0 non va UP senza panic.

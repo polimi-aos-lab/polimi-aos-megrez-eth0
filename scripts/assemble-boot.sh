@@ -427,6 +427,12 @@ build_initramfs() {
     local source_initramfs="${stage_dir}/${initramfs_name}"
     local tmp_root="${stage_dir}/build/assemble-boot-initramfs-root"
     local release=${2:-}
+    local source_dir output_dir
+    source_dir=$(cd -- "$(dirname -- "${source_initramfs}")" && pwd)
+    source_initramfs="${source_dir}/$(basename -- "${source_initramfs}")"
+    output_dir=$(cd -- "$(dirname -- "${output}")" && pwd)
+    output="${output_dir}/$(basename -- "${output}")"
+
 
     rm -rf -- "${tmp_root}"
     mkdir -p -- "${tmp_root}"
