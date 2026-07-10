@@ -90,6 +90,19 @@
 			xen,force-assign-without-iommu;
 		};
 
+		/*
+		 * EIC7700 coherent DMA mappings access die0 RAM through its uncached
+		 * system-port alias.  The domU owns 0xa0000000-0xbfffffff, whose alias
+		 * is 0xc020000000-0xc03fffffff.  Give stage-2 the same 1:1 view;
+		 * descriptor DMA handles still use the normal direct-mapped addresses.
+		 */
+		uncached-memory-window@c020000000 {
+			reg = <0xc0 0x20000000 0x0 0x20000000>;
+			xen,reg = <0xc0 0x20000000 0x0 0x20000000
+			           0xc0 0x20000000>;
+			xen,force-assign-without-iommu;
+		};
+
 		domu1_gmac0: ethernet@50400000 {
 			compatible = "eswin,win2030-qos-eth";
 			status = "okay";
