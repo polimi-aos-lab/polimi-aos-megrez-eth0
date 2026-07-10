@@ -10,30 +10,33 @@ Questa guida riproduce la dimostrazione end-to-end del repository:
 Il risultato atteso è un domU che porta `eth0` UP senza panic di Xen, raggiunge
 il carrier a 1 Gbps e comunica con il Mac usato come server TFTP.
 
-> [!WARNING]
-> Questo è un profilo di laboratorio trusted no-IOMMU. Il GMAC può eseguire DMA
-> verso indirizzi macchina e il guest deve essere considerato fidato. Non usare
-> questa configurazione come modello di isolamento per guest non fidati.
+> [!WARNING] Questo è un profilo di laboratorio trusted no-IOMMU. Il GMAC può
+> eseguire DMA verso indirizzi macchina e il guest deve essere considerato
+> fidato. Non usare questa configurazione come modello di isolamento per guest
+> non fidati.
+
+Per il boot Linux diretto senza Xen vedere
+[`megrez-baremetal-boot.md`](megrez-baremetal-boot.md).
 
 ## Configurazione di riferimento
 
-La procedura verificata usa:
+La procedura verificata (su rete locale con prefisso 192.168.188.x) usa:
 
-| Componente | Valore |
-|---|---|
-| Host TFTP | macOS, interfaccia `en0` |
-| IP host | `192.168.188.132/24` |
-| IP U-Boot/guest statico | `192.168.188.110/24` |
-| Porta seriale tipica | `/dev/cu.usbmodem3102` |
-| UART | 115200 baud, 8N1, senza flow control |
-| RAM domU | `0xa0000000-0xbfffffff` (512 MiB) |
-| Alias uncached domU | `0xc020000000-0xc03fffffff` |
-| NIC assegnata | GMAC0, `ethernet@50400000` |
-| Interrupt NIC | PLIC IRQ61 |
+| Componente              | Valore                               |
+| ----------------------- | ------------------------------------ |
+| Host TFTP               | macOS, interfaccia `en0`             |
+| IP host                 | `192.168.188.132/24`                 |
+| IP U-Boot/guest statico | `192.168.188.110/24`                 |
+| Porta seriale tipica    | `/dev/cu.usbmodem3102`               |
+| UART                    | 115200 baud, 8N1, senza flow control |
+| RAM domU                | `0xa0000000-0xbfffffff` (512 MiB)    |
+| Alias uncached domU     | `0xc020000000-0xc03fffffff`          |
+| NIC assegnata           | GMAC0, `ethernet@50400000`           |
+| Interrupt NIC           | PLIC IRQ61                           |
 
-Occorrono un cavo Ethernet collegato a una LAN attiva e la debug probe USB
-della board. L'alimentazione della board e quella della probe sono distinte:
-replug della probe non equivale a un reset della board.
+Occorrono un cavo Ethernet collegato a una LAN attiva e la debug probe USB della
+board. L'alimentazione della board e quella della probe sono distinte: replug
+della probe non equivale a un reset della board.
 
 ## 1. Preparare e costruire il payload
 
@@ -55,12 +58,7 @@ make fetch-sources
 Costruire l'intera immagine Xen con il passthrough GMAC0 abilitato:
 
 ```sh
-ENABLE_DOMU1_ETH_PASSTHROUGH=1 \
-BOOT_IFACE=tftp \
-DOMU1_STATIC_MEM_START=0xa0000000 \
-DOMU1_STATIC_MEM_SIZE=0x20000000 \
-DOMU1_DIRECT_MAP=1 \
-make image-xen JOBS=1
+ENABLE_DOMU1_ETH_PASSTHROUGH=1 BOOT_IFACE=tftp DOMU1_STATIC_MEM_START=0xa0000000 DOMU1_STATIC_MEM_SIZE=0x20000000 DOMU1_DIRECT_MAP=1 make image-xen JOBS=1
 ```
 
 Il target costruisce in sequenza:
@@ -89,12 +87,7 @@ Per rigenerare soltanto il payload, riusando kernel, initramfs e Xen già
 costruiti:
 
 ```sh
-make board-xen-smoke \
-  ENABLE_DOMU1_ETH_PASSTHROUGH=1 \
-  BOOT_IFACE=tftp \
-  DOMU1_STATIC_MEM_START=0xa0000000 \
-  DOMU1_STATIC_MEM_SIZE=0x20000000 \
-  DOMU1_DIRECT_MAP=1
+make board-xen-smoke ENABLE_DOMU1_ETH_PASSTHROUGH=1 BOOT_IFACE=tftp DOMU1_STATIC_MEM_START=0xa0000000 DOMU1_STATIC_MEM_SIZE=0x20000000 DOMU1_DIRECT_MAP=1
 ```
 
 ## 2. Avviare il server TFTP sul Mac
@@ -114,9 +107,7 @@ La configurazione di riferimento restituisce:
 Avviare il server dalla root del repository e lasciarlo in foreground:
 
 ```sh
-node scripts/tftp-serve.mjs \
-  --root stage/xen/board-xen-smoke \
-  --port 69
+node scripts/tftp-serve.mjs --root stage/xen/board-xen-smoke --port 69
 ```
 
 Se macOS nega l'apertura della porta UDP 69, ripetere con `sudo`. Alla prima
@@ -179,11 +170,7 @@ Se la board è già al prompt `=>`, saltare il reboot.
 Al prompt U-Boot eseguire una riga alla volta:
 
 ```text
-setenv serverip 192.168.188.132
-setenv ipaddr 192.168.188.110
-setenv autostart no
-tftpboot 0x88100000 boot.scr
-source 0x88100000
+setenv serverip 192.168.188.132; setenv ipaddr 192.168.188.110; setenv autostart no; tftpboot 0x88100000 boot.scr; source 0x88100000
 ```
 
 `tftpboot` deve terminare con `Bytes transferred`. `source` carica
@@ -247,7 +234,7 @@ Link is Up - 1Gbps/Full - flow control rx/tx
 
 e `ip link` deve mostrare `UP` e `LOWER_UP`. Xen non deve panicare.
 
-### DHCP
+### DHCP (questo non funziona da me)
 
 Richiedere un lease:
 
@@ -269,8 +256,8 @@ ip addr show dev eth0
 ip route
 ```
 
-Se il lease è stato ottenuto ma l'indirizzo non è stato configurato, usare il
-test statico seguente.
+Se il lease è stato ottenuto ma l'indirizzo non è stato configurato, o il ping
+comunque non funziona usare il test statico seguente.
 
 ### Ping con configurazione statica
 
