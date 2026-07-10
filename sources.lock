@@ -3,7 +3,7 @@
 #   git <name> <git-url> <source-ref> <pinned-commit>
 #   tar <name> <tar-url> <sha256> <strip-components>
 # source-ref records where the git pin came from; scripts/fetch-sources.sh fetches pinned material.
-git rockos-kernel https://github.com/milkv-megrez/rockos-kernel.git refs/heads/rockos-v6.6.y f9057cdc4816276e8ffb15f263f25ba9bd5a077e
-git xen https://gitlab.com/vittorio.zaccaria/xen.git refs/heads/megrez-domu-eth0-passthrough ef7506416366c1f6e9161b0a0b5b54bad20fd3f6
+git rockos-kernel https://github.com/vzaccaria/rockos-kernel.git refs/heads/megrez-domu-eth0-passthrough 2466f43bcca316ea600454063a109f506db08954
+git xen https://gitlab.com/vittorio.zaccaria/xen.git refs/heads/megrez-domu-eth0-passthrough dd76769acdbac4582b229780c593c64e2e3f4c90
 tar busybox-1.36.1 https://busybox.net/downloads/busybox-1.36.1.tar.bz2 b8cc24c9574d809e7279c3be349795c5d5ceb6fdf19ca709f80cde50e47de314 1
 tar lrzsz-0.12.20 https://www.ohse.de/uwe/releases/lrzsz-0.12.20.tar.gz c28b36b14bddb014d9e9c97c52459852f97bd405f89113f30bee45ed92728ff1 1
