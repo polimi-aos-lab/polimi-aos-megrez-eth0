@@ -8,17 +8,18 @@ Questa guida riproduce la dimostrazione bare-metal del repository, senza Xen:
 4. verifica di moduli STMMAC, carrier, DHCP e connettività LAN.
 
 Il risultato atteso è un Linux bare-metal che raggiunge la shell initramfs,
-carica `dwmac-win2030` come modulo e porta UP le interfacce Ethernet disponibili.
+carica `dwmac-win2030` come modulo e porta UP le interfacce Ethernet
+disponibili.
 
 ## Differenze rispetto alla demo Xen
 
-| Bare-metal | Xen dom0-less |
-|---|---|
-| Linux gira direttamente in S-mode | Linux gira come domU sotto Xen |
-| driver NIC come moduli (`=m`) | driver NIC built-in (`=y`) |
-| `booti` avvia Linux | `bootm` avvia Xen |
-| nessun p2m o vPLIC | RAM direct-map, p2m e vPLIC IRQ61 |
-| output seriale Linux diretto | output domU inoltrato attraverso Xen |
+| Bare-metal                        | Xen dom0-less                        |
+| --------------------------------- | ------------------------------------ |
+| Linux gira direttamente in S-mode | Linux gira come domU sotto Xen       |
+| driver NIC come moduli (`=m`)     | driver NIC built-in (`=y`)           |
+| `booti` avvia Linux               | `bootm` avvia Xen                    |
+| nessun p2m o vPLIC                | RAM direct-map, p2m e vPLIC IRQ61    |
+| output seriale Linux diretto      | output domU inoltrato attraverso Xen |
 
 Per la demo Xen vedere [`megrez-xen-boot.md`](megrez-xen-boot.md).
 
@@ -26,20 +27,20 @@ Per la demo Xen vedere [`megrez-xen-boot.md`](megrez-xen-boot.md).
 
 La procedura usa lo stesso trasporto TFTP della demo Xen:
 
-| Componente | Valore |
-|---|---|
-| Host TFTP | macOS, interfaccia `en0` |
-| IP host | `192.168.188.132/24` |
-| IP U-Boot/Linux statico | `192.168.188.110/24` |
-| Porta seriale tipica | `/dev/cu.usbmodem3102` |
-| UART | 115200 baud, 8N1, senza flow control |
-| Kernel | `Image` |
-| Device tree | `eic7700-milkv-megrez.dtb` |
-| Initramfs | `initramfs-megrez.cpio.gz` |
+| Componente              | Valore                               |
+| ----------------------- | ------------------------------------ |
+| Host TFTP               | macOS, interfaccia `en0`             |
+| IP host                 | `192.168.188.132/24`                 |
+| IP U-Boot/Linux statico | `192.168.188.110/24`                 |
+| Porta seriale tipica    | `/dev/cu.usbmodem3102`               |
+| UART                    | 115200 baud, 8N1, senza flow control |
+| Kernel                  | `Image`                              |
+| Device tree             | `eic7700-milkv-megrez.dtb`           |
+| Initramfs               | `initramfs-megrez.cpio.gz`           |
 
-Occorrono un cavo Ethernet collegato a una LAN attiva e la debug probe USB
-della board. La probe e la board hanno alimentazioni distinte: replug della
-probe non equivale a un reset della board.
+Occorrono un cavo Ethernet collegato a una LAN attiva e la debug probe USB della
+board. La probe e la board hanno alimentazioni distinte: replug della probe non
+equivale a un reset della board.
 
 ## 1. Preparare e costruire il payload
 
@@ -119,9 +120,7 @@ La configurazione di riferimento restituisce:
 Avviare il server dalla root del repository e lasciarlo in foreground:
 
 ```sh
-node scripts/tftp-serve.mjs \
-  --root stage/baremetal/boot \
-  --port 69
+node scripts/tftp-serve.mjs --root stage/baremetal/boot --port 69
 ```
 
 Se macOS nega l'apertura della porta UDP 69, ripetere con `sudo`. Alla prima

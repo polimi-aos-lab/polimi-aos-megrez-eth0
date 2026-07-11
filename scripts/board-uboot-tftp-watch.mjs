@@ -18,6 +18,9 @@ const bootTimeoutMs = Number.parseInt(process.env.BOOT_TIMEOUT_MS ?? '180000', 1
 const pokeIntervalMs = Number.parseInt(process.env.POKE_INTERVAL_MS ?? '1000', 10);
 const txCharDelayMs = Number.parseInt(process.env.TX_CHAR_DELAY_MS ?? '10', 10);
 const commandTimeoutMs = Number.parseInt(process.env.COMMAND_TIMEOUT_MS ?? '120000', 10);
+const exitOnSuccess = process.env.EXIT_ON_SUCCESS !== '0';
+const postSuccessCommand = process.env.POST_SUCCESS_COMMAND ?? '';
+const postSuccessDelayMs = Number.parseInt(process.env.POST_SUCCESS_DELAY_MS ?? '500', 10);
 
 
 const promptPattern = /=>\s*$/m;
@@ -72,6 +75,7 @@ let failHit = null;
 let resetHit = null;
 let successHit = null;
 let promptReturn = false;
+let postSuccessSent = false;
 const reportedProgress = new Set();
 const keepAlive = setInterval(() => {}, 1000);
 
@@ -212,9 +216,15 @@ async function bootAndWatch(port) {
       await closeAndExit(port, 20, `failure marker detected: ${failHit}`);
       return;
     }
-    if (successHit) {
+    if (successHit && exitOnSuccess) {
       await closeAndExit(port, 0, `success marker detected: ${successHit}`);
       return;
+    }
+    if (successHit && postSuccessCommand && !postSuccessSent) {
+      postSuccessSent = true;
+      await sleep(postSuccessDelayMs);
+      note(`sending post-success command: ${postSuccessCommand}`);
+      await writePortSlow(port, `${postSuccessCommand}\r`);
     }
     if (resetHit) {
       await closeAndExit(port, 30, `board reset/reboot marker detected after boot command: ${resetHit}`);
