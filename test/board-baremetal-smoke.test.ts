@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const smokeScript = join(repoRoot, 'scripts', 'board-baremetal-smoke.sh');
 
 let tempRoot: string | undefined;

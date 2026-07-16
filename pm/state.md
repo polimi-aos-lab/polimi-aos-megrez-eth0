@@ -1,6 +1,6 @@
 # polimi-aos-megrez-eth0 — State
 
-Updated: 2026-07-10
+Updated: 2026-07-16
 
 ## Roadmap
 
@@ -12,24 +12,22 @@ Active (children + detail in bd; run `bd show <id>`):
 2. `…-sju` — Fase 3: Xen dom0-less + NIC passthrough su Megrez. Prossimo
    percorso principale: `sju.4` loop agente HW; difetti architetturali residui
    restano tracciati nei bead aperti dell'epic.
+3. `…-cu5` — Future fixes. Correzioni differibili emerse dal bring-up Xen.
+   Open: `sju.12` moduli non eseguibili; `sju.7` console; `sju.8` vSBI DBCN;
+   `sju.9` root P2M Sv48x4; `sju.10` invalidazione GVMA.
 
 Parked: relè USB reset HW (miglioramento del reset SBI/SysRq) · immagine
 multi-arch via registry (se il flusso diventa ripetitivo).
 
 ## Handoff
 
-Written: 2026-07-10 · assistant
+Written: 2026-07-16 16:00 CEST · assistant
 
-State: datapath GMAC0 domU verificato end-to-end su board reale. La RAM static
-direct-map `0xa0000000-0xbfffffff` e il suo alias uncached EIC7700
-`0xc020000000-0xc03fffffff` sono entrambi nel p2m. Xen seleziona il contesto PLIC
-S del boot hart (hart 2 → context 5), inoltra IRQ61 al vPLIC e il guest riceve
-pacchetti. Cache maintenance non-coherent registrata dal ccache driver; il
-profilo trusted no-IOMMU dichiara esplicitamente `tbus=<0xf00>`.
-
-Verificato: carrier 1Gbps/Full, DHCP `192.168.188.50`, IRQ61 incrementale, RX/TX,
-ping LAN 3/3. Payload pulito rigenerato e bootato da TFTP; assenti warning DMA,
-WARN TBU e trace PLIC temporanei. Pin sorgenti aggiornati ai fork pubblicati.
-
-Next: procedere col loop agente HW (`sju.4`) usando il payload Xen verificato.
-Blockers: nessuno; board lasciata al prompt domU dopo boot del payload finale.
+Done: `…-hbn` ha spostato il package Node dal sottoprogetto `mcp/` al root,
+inclusi server MCP, backend board/seriale/YMODEM e sei test; i sei script host
+usano ora manifest e build root, i target Make sono `node-*`, e `mcp/` è stata
+rimossa senza shim. State: working. `npm ci`, typecheck, build e 31/31 test
+passano; i target Make equivalenti e gli smoke CLI degli script passano.
+Next: 1) proseguire con `sju.4` sul payload Xen verificato 2) affrontare i fix
+`cu5` secondo priorità. Gotchas: `uboot-ymodem-fatwrite.mjs` richiede prima
+`make node-build`, perché importa `dist/src/backend/ymodem.js`. Blockers: none.

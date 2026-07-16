@@ -15,9 +15,9 @@ Decisions: `pm/adr/0001-architettura-build-env-e-mcp.md`.
 - **build-env**: multi-arch container with prebuilt `riscv64-linux-gnu`
   toolchain; emits portable RISC-V artifacts (`Image`, modules, Xen, DTB,
   initramfs). Rebuild per host; do not `docker save` x86 images for Mac.
-- **MCP**: TypeScript/Node running natively on the host; typed
-  `deploy/boot/run/observe/reset`, real `board` backend over UART/ymodem, mock
-  backend for offline serial scenarios.
+- **MCP**: TypeScript/Node package at repository root, running natively on the
+  host; typed `deploy/boot/run/observe/reset`, real `board` backend over
+  UART/ymodem, mock backend for offline serial scenarios.
 - **Xen smoke**: board-first U-Boot/SD payload (`board-xen-smoke`); QEMU `virt`
   does not emulate the real NIC and is not the hardware gate.
 
@@ -27,17 +27,14 @@ Sources pinned in `sources.lock`: BSP kernel `milkv-megrez/rockos-kernel`; Xen
 ## Build & test
 
 - `make build-container` — Docker build image (`TAG`/`PLATFORM` overrideable).
+- `make node-install` / `node-typecheck` / `node-build` / `node-test` — install,
+  validate, build and test the host-native Node tooling.
 - `make fetch-sources` — materialize pinned sources under `stage/src/`.
 - `make build-artifacts` — sequential aggregate for both profiles.
-- `make build-artifacts-baremetal` — build no-Xen Linux under `stage/baremetal/`
-  with NIC as modules (`=m`).
-- `make build-artifacts-xen` — build domU Linux under `stage/xen/` with NIC
-  built-in (`=y`) for the Xen RISC-V domU module-exec limitation.
-- `make build-xen` — build raw Xen and copy it to `stage/xen/xen`.
-- `make board-baremetal-smoke` / `make image-baremetal` — create SD/U-Boot Linux payload
-  in `stage/baremetal/boot/`.
-- `make board-xen-smoke` / `make image-xen` — create SD/U-Boot Xen dom0-less
-  smoke payload in `stage/xen/board-xen-smoke/`.
+- `make build-artifacts-{baremetal,xen}` — build Linux profiles under `stage/`;
+  baremetal uses NIC modules, Xen domU uses the NIC built-in.
+- `make build-xen` — build raw Xen under `stage/xen/`.
+- `make {board-,image-}{baremetal,xen}` — create U-Boot/SD smoke payloads.
 
 ## Conventions
 

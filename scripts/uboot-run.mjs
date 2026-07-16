@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { writeFile } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 
-const require = createRequire(new URL('../mcp/package.json', import.meta.url));
+const require = createRequire(new URL('../package.json', import.meta.url));
 const { SerialPort } = require('serialport');
 
 function usage() {

@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { createWriteStream, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-const require = createRequire(new URL('../mcp/package.json', import.meta.url));
+const require = createRequire(new URL('../package.json', import.meta.url));
 const { SerialPort } = require('serialport');
 
 const serialPath = process.env.SERIAL_PATH ?? '/dev/cu.usbmodem2102';

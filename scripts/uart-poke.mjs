@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Minimal UART interaction: open once, send a line, read for a window, print.
 import { createRequire } from 'node:module';
-const require = createRequire(new URL('../mcp/package.json', import.meta.url));
+const require = createRequire(new URL('../package.json', import.meta.url));
 const { SerialPort } = require('serialport');
 
 const serialPath = process.env.SERIAL_PATH ?? '/dev/cu.usbmodem3102';

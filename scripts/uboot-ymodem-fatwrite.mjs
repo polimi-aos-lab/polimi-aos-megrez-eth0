@@ -8,9 +8,9 @@ import {
   YMODEM_C,
   YMODEM_EOT,
   YMODEM_NAK,
-} from '../mcp/dist/src/backend/ymodem.js';
+} from '../dist/src/backend/ymodem.js';
 
-const require = createRequire(new URL('../mcp/package.json', import.meta.url));
+const require = createRequire(new URL('../package.json', import.meta.url));
 const { SerialPort } = require('serialport');
 
 function usage() {

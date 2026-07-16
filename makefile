@@ -5,7 +5,7 @@ PLATFORM ?= $(DEFAULT_PLATFORM)
 TAG ?= polimi-aos-megrez-build-env:$(subst /,-,$(PLATFORM))
 JOBS ?= 1
 
-.PHONY: build-container enter-container toolchain-check fetch-sources build-artifacts build-artifacts-baremetal build-artifacts-xen build-xen board-baremetal-smoke image-baremetal image-xen board-xen-smoke mcp-install mcp-typecheck mcp-build mcp-test
+.PHONY: build-container enter-container toolchain-check fetch-sources build-artifacts build-artifacts-baremetal build-artifacts-xen build-xen board-baremetal-smoke image-baremetal image-xen board-xen-smoke node-install node-typecheck node-build node-test
 
 build-container:
 	$(DOCKER) build --platform $(PLATFORM) -t $(TAG) .
@@ -48,14 +48,14 @@ image-xen:
 board-xen-smoke:
 	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(TAG)" STAGE_DIR=/repo/stage/xen ./scripts/board-xen-smoke.sh
 
-mcp-install:
-	npm --prefix mcp ci
+node-install:
+	npm ci
 
-mcp-typecheck:
-	npm --prefix mcp run typecheck
+node-typecheck:
+	npm run typecheck
 
-mcp-build:
-	npm --prefix mcp run build
+node-build:
+	npm run build
 
-mcp-test:
-	npm --prefix mcp test
+node-test:
+	npm test

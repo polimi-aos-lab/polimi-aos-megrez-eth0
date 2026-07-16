@@ -6,3 +6,9 @@
 
 # Build artifacts (RISC-V outputs)
 stage/
+
+# Node artifacts
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
